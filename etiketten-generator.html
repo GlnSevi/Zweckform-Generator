@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Regal-Etiketten – Zweckform L4761 (192 × 61 mm)</title>
+<style>
+  :root{
+    --label-w: 192mm;
+    --label-h: 61mm;
+    --margin-left: 9mm;     /* (210 - 192) / 2 */
+    --margin-top: 26.5mm;   /* (297 - 4*61) / 2 */
+    --offset-x: 0mm;        /* Feinjustierung Drucker */
+    --offset-y: 0mm;
+    --font-size: 36mm;
+  }
+  *{ box-sizing: border-box; }
+  body{
+    margin: 0;
+    font-family: "Segoe UI", Arial, sans-serif;
+    background: #e8eaed;
+  }
+
+  /* ---------- Bedienleiste ---------- */
+  #controls{
+    background: #1f3a5f;
+    color: #fff;
+    padding: 14px 18px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px 26px;
+    align-items: flex-end;
+  }
+  #controls h1{
+    flex-basis: 100%;
+    margin: 0 0 2px 0;
+    font-size: 17px;
+    font-weight: 600;
+  }
+  #controls h1 small{ font-weight: 400; opacity: .75; margin-left: 8px; }
+  .group{ display: flex; flex-direction: column; gap: 4px; }
+  .group label{ font-size: 11px; text-transform: uppercase; letter-spacing: .4px; opacity: .8; }
+  .row{ display: flex; gap: 6px; align-items: center; }
+  input[type=text], input[type=number], select{
+    font-size: 15px;
+    padding: 5px 7px;
+    border: 1px solid #9fb2c8;
+    border-radius: 4px;
+    width: 70px;
+  }
+  input#letters{ width: 90px; text-transform: uppercase; }
+  select{ width: auto; }
+  .check{ display: flex; align-items: center; gap: 6px; font-size: 13px; padding-bottom: 6px; }
+  .check input{ width: 16px; height: 16px; }
+  button{
+    font-size: 15px;
+    padding: 8px 18px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  #printBtn{ background: #2fa14b; color: #fff; }
+  #printBtn:hover{ background: #278a40; }
+  #info{
+    flex-basis: 100%;
+    font-size: 13px;
+    opacity: .85;
+  }
+  #hint{
+    background: #fff7d6;
+    color: #5a4a00;
+    padding: 8px 18px;
+    font-size: 13px;
+    border-bottom: 1px solid #e6d78a;
+  }
+
+  /* ---------- Bögen ---------- */
+  #sheets{ padding: 20px; }
+  .sheet{
+    width: 210mm;
+    height: 297mm;
+    position: relative;
+    background: #fff;
+    overflow: hidden;
+  }
+  @media screen{
+    .sheet{
+      zoom: 0.55;
+      margin: 0 auto 30px auto;
+      box-shadow: 0 2px 10px rgba(0,0,0,.35);
+    }
+    /* Etikettenkanten am Bildschirm immer andeuten */
+    .label{ outline: 1px dashed #b9c2cc; }
+  }
+  .label{
+    position: absolute;
+    left: calc(var(--margin-left) + var(--offset-x));
+    width: var(--label-w);
+    height: var(--label-h);
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: bold;
+    font-size: var(--font-size);
+    line-height: 1;
+    color: #000;
+  }
+  .label.bordered::before{
+    content: "";
+    position: absolute;
+    inset: 1.5mm;
+    border: 0.4mm solid #000;
+    pointer-events: none;
+  }
+  /* Text immer mittig – unabhängig vom Barcode */
+  .label .textrow{
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10mm;
+  }
+  .label .part{ white-space: nowrap; }
+  /* flacher Barcode unten mittig */
+  .barcode{
+    position: absolute;
+    bottom: 3mm;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  body.with-frames .label{ border: 0.2mm solid #999; }
+
+  @media print{
+    @page{ size: A4 portrait; margin: 0; }
+    body{ background: #fff; }
+    #controls, #hint{ display: none; }
+    #sheets{ padding: 0; }
+    .sheet{
+      margin: 0;
+      box-shadow: none;
+      page-break-after: always;
+    }
+    .sheet:last-child{ page-break-after: auto; }
+    .label{ outline: none; }
+    body.with-frames .label{ border: 0.2mm solid #999; }
+  }
+</style>
+</head>
+<body>
+
+<div id="controls">
+  <h1>Regal-Etiketten Generator
+    <small>Avery Zweckform L4761-100 · 192 × 61 mm · 4 Etiketten je A4-Bogen</small>
+  </h1>
+
+  <div class="group">
+    <label>Buchstabe(n), mehrere mit Komma</label>
+    <input type="text" id="letters" value="K,A">
+  </div>
+
+  <div class="group">
+    <label>1. Zahl (z. B. Feld) von – bis</label>
+    <div class="row">
+      <input type="number" id="n1from" value="1" min="0">
+      <span>–</span>
+      <input type="number" id="n1to" value="20" min="0">
+    </div>
+  </div>
+
+  <div class="group">
+    <label>2. Zahl (z. B. Ebene) von – bis</label>
+    <div class="row">
+      <input type="number" id="n2from" value="9" min="0">
+      <span>–</span>
+      <input type="number" id="n2to" value="9" min="0">
+    </div>
+  </div>
+
+  <div class="group">
+    <label>Reihenfolge</label>
+    <select id="order">
+      <option value="pair">Buchstaben zusammen (K 01, A 01, K 02 …)</option>
+      <option value="seq">Nacheinander (erst alle K, dann alle A)</option>
+    </select>
+  </div>
+
+  <div class="group">
+    <label>Start auf Bogen bei Etikett</label>
+    <select id="startpos">
+      <option value="1">1 (oben)</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+      <option value="4">4 (unten)</option>
+    </select>
+  </div>
+
+  <div class="group">
+    <label>Mindest-Stellen (führende Nullen)</label>
+    <select id="pad">
+      <option value="1">1</option>
+      <option value="2" selected>2</option>
+      <option value="3">3</option>
+    </select>
+  </div>
+
+  <div class="group">
+    <label>Schriftgröße (mm)</label>
+    <input type="number" id="fontsize" value="36" min="10" max="50">
+  </div>
+
+  <div class="group">
+    <label>Versatz X / Y (mm, Feinjustierung)</label>
+    <div class="row">
+      <input type="number" id="offx" value="0" step="0.5">
+      <input type="number" id="offy" value="0" step="0.5">
+    </div>
+  </div>
+
+  <div class="check">
+    <input type="checkbox" id="barcode" checked>
+    <label for="barcode" style="all:unset;cursor:pointer;">Barcode darunter, nur bei:</label>
+    <input type="text" id="bcletters" value="K" style="width:50px;text-transform:uppercase;" title="leer = alle Buchstaben">
+  </div>
+
+  <div class="check">
+    <input type="checkbox" id="border" checked>
+    <label for="border" style="all:unset;cursor:pointer;">Umrandung auf Etikett drucken</label>
+  </div>
+
+  <div class="check">
+    <input type="checkbox" id="frames">
+    <label for="frames" style="all:unset;cursor:pointer;">Schnittrahmen andrucken (Test auf Normalpapier)</label>
+  </div>
+
+  <button id="printBtn" onclick="window.print()">🖨️ Drucken</button>
+
+  <div id="info"></div>
+</div>
+
+<div id="hint">
+  <b>Druckeinstellungen:</b> Papierformat A4 · Skalierung <b>100 %</b> (nicht „An Seite anpassen“) ·
+  Ränder „Keine“ oder „Standard“. Bei leichtem Versatz die Feinjustierung X/Y nutzen.
+  Zuerst auf Normalpapier testen und gegen einen Etikettenbogen halten.
+</div>
+
+<div id="sheets"></div>
+
+<script>
+"use strict";
+
+/* ---------- Code 128 (Code B) ---------- */
+const C128 = [
+"212222","222122","222221","121223","121322","131222","122213","122312","132212","221213",
+"221312","231212","112232","122132","122231","113222","123122","123221","223211","221132",
+"221231","213212","223112","312131","311222","321122","321221","312212","322112","322211",
+"212123","212321","232121","111323","131123","131321","112313","132113","132311","211313",
+"231113","231311","112133","112331","132131","113123","113321","133121","313121","211331",
+"231131","213113","213311","213131","311123","311321","331121","312113","312311","332111",
+"314111","221411","431111","111224","111422","121124","121421","141122","141221","112214",
+"112412","122114","122411","142112","142211","241211","221114","413111","241112","134111",
+"111242","121142","121241","114212","124112","124211","411212","421112","421211","212141",
+"214121","412121","111143","111341","131141","114113","114311","411113","411311","113141",
+"114131","311141","411131","211412","211214","211232","2331112"];
+
+function code128Svg(text, barHeightMm, moduleMm){
+  const codes = [104];
+  for (const ch of text){
+    const v = ch.charCodeAt(0) - 32;
+    if (v < 0 || v > 94) return "";
+    codes.push(v);
+  }
+  let sum = 104;
+  codes.slice(1).forEach((v, i) => sum += v * (i + 1));
+  codes.push(sum % 103, 106);
+
+  let x = 10; // Ruhezone links (10 Module)
+  const rects = [];
+  for (const c of codes){
+    const p = C128[c];
+    for (let i = 0; i < p.length; i++){
+      const w = +p[i];
+      if (i % 2 === 0) rects.push(`<rect x="${x}" y="0" width="${w}" height="100"/>`);
+      x += w;
+    }
+  }
+  x += 10; // Ruhezone rechts
+  const wMm = (x * moduleMm).toFixed(2);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${x} 100" preserveAspectRatio="none" style="width:${wMm}mm;height:${barHeightMm}mm;display:block;">${rects.join("")}</svg>`;
+}
+
+/* ---------- Etiketten erzeugen ---------- */
+const $ = id => document.getElementById(id);
+const FIELDS = ["letters","n1from","n1to","n2from","n2to","order","startpos","pad","fontsize","offx","offy","barcode","bcletters","border","frames"];
+
+function range(a, b){
+  a = parseInt(a, 10); b = parseInt(b, 10);
+  if (isNaN(a) || isNaN(b)) return [];
+  const out = [];
+  const step = a <= b ? 1 : -1;
+  for (let i = a; step > 0 ? i <= b : i >= b; i += step) out.push(i);
+  return out;
+}
+
+function build(){
+  const letters = $("letters").value.split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
+  const r1 = range($("n1from").value, $("n1to").value);
+  const r2 = range($("n2from").value, $("n2to").value);
+  const padLen = parseInt($("pad").value, 10);
+  const pad = n => String(n).padStart(padLen, "0");
+  const withBarcode = $("barcode").checked;
+  const bcLetters = $("bcletters").value.split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
+  const withBorder = $("border").checked;
+
+  document.documentElement.style.setProperty("--font-size", ($("fontsize").value || 36) + "mm");
+  document.documentElement.style.setProperty("--offset-x", ($("offx").value || 0) + "mm");
+  document.documentElement.style.setProperty("--offset-y", ($("offy").value || 0) + "mm");
+  document.body.classList.toggle("with-frames", $("frames").checked);
+
+  const items = [];
+  if ($("order").value === "pair"){
+    for (const n1 of r1) for (const n2 of r2) for (const L of letters)
+      items.push({ L, n1: pad(n1), n2: pad(n2) });
+  } else {
+    for (const L of letters) for (const n1 of r1) for (const n2 of r2)
+      items.push({ L, n1: pad(n1), n2: pad(n2) });
+  }
+
+  const slots = [];
+  for (let i = 1; i < parseInt($("startpos").value, 10); i++) slots.push(null);
+  slots.push(...items);
+
+  const sheetsEl = $("sheets");
+  sheetsEl.innerHTML = "";
+  const perSheet = 4;
+  const sheetCount = Math.max(1, Math.ceil(slots.length / perSheet));
+
+  for (let s = 0; s < sheetCount; s++){
+    const sheet = document.createElement("div");
+    sheet.className = "sheet";
+    for (let p = 0; p < perSheet; p++){
+      const item = slots[s * perSheet + p];
+      if (!item) continue;
+      const el = document.createElement("div");
+      el.className = "label" + (withBorder ? " bordered" : "");
+      el.style.top = `calc(26.5mm + ${p} * 61mm + var(--offset-y))`;
+      let html =
+        `<div class="textrow">` +
+        `<span class="part">${item.L}</span>` +
+        `<span class="part">${item.n1}</span>` +
+        `<span class="part">${item.n2}</span>` +
+        `</div>`;
+      if (withBarcode && (bcLetters.length === 0 || bcLetters.includes(item.L))){
+        const code = item.L + item.n1 + item.n2;
+        html += `<span class="barcode">${code128Svg(code, 10, 0.33)}</span>`;
+      }
+      el.innerHTML = html;
+      sheet.appendChild(el);
+    }
+    sheetsEl.appendChild(sheet);
+  }
+
+  $("info").textContent =
+    `${items.length} Etikett${items.length === 1 ? "" : "en"} auf ${sheetCount} Bogen/Bögen` +
+    (slots.length % 4 ? ` – auf dem letzten Bogen bleiben ${4 - (slots.length % 4)} Etikett(en) frei (Bogen wiederverwendbar über „Start bei Etikett“).` : "");
+
+  save();
+}
+
+/* ---------- Einstellungen merken ---------- */
+function save(){
+  const data = {};
+  FIELDS.forEach(id => {
+    const el = $(id);
+    data[id] = el.type === "checkbox" ? el.checked : el.value;
+  });
+  try{ localStorage.setItem("lagerLabelSettings2", JSON.stringify(data)); }catch(e){}
+}
+function load(){
+  try{
+    const data = JSON.parse(localStorage.getItem("lagerLabelSettings2") || "{}");
+    FIELDS.forEach(id => {
+      if (!(id in data)) return;
+      const el = $(id);
+      if (el.type === "checkbox") el.checked = data[id]; else el.value = data[id];
+    });
+  }catch(e){}
+}
+
+FIELDS.forEach(id => $(id).addEventListener("input", build));
+load();
+build();
+</script>
+</body>
+</html>
