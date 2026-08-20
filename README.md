@@ -11,9 +11,26 @@ Erzeugt und druckt Lagerort-Etiketten im Format **Avery Zweckform L4761-100**
 
 ### Reiter „Etiketten (Papier)“
 
+Oben umschaltbar: **Serie (Buchstabe + Zahlen)** oder **Freitext**.
+
+**Serie:**
+
 - **Buchstabe(n)** – z. B. `K` oder `K,A` (mehrere mit Komma)
 - **1. Zahl von–bis** – z. B. Feld 1 bis 20
 - **2. Zahl von–bis** – z. B. Ebene 9 bis 9 (fest) oder ein Bereich
+
+**Freitext:**
+
+- Beliebige Texte drucken – **je Zeile ein Etikett**, mittig auf dem Etikett
+  (zu lange Texte werden automatisch passend verkleinert)
+- **Anzahl je Text** legt fest, wie oft jede Zeile gedruckt wird;
+  eine abweichende Anzahl je Zeile geht mit senkrechtem Strich,
+  z. B. `Reserviert Werkstatt | 8`
+- Optional **Barcode (Code 128)** mit dem Text unter dem Etikett
+  (bei Umlauten/Sonderzeichen nicht möglich – das Programm weist darauf hin)
+
+**Gemeinsam:**
+
 - **Drucker** direkt auswählen und mit **🖨 Drucken** ohne Umweg drucken
 - **Druckereinstellungen…**: öffnet den Windows-Treiberdialog des Druckers
   (z. B. **Papierfach** wählen) – die Auswahl wird gemerkt und beim Druck verwendet

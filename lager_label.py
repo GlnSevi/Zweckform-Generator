@@ -21,6 +21,7 @@ import struct
 import sys
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+from tkinter import font as tkfont
 
 try:
     import win32con
@@ -107,7 +108,27 @@ def make_range(a, b):
     return list(range(a, b + step, step))
 
 
+def build_freitext_items(opts):
+    """Freitext-Etiketten: je Zeile ein Text; „Text | 5“ überschreibt die Anzahl."""
+    default = max(1, min(999, parse_int(opts.get("ftcount"), 1)))
+    items = []
+    for line in str(opts.get("freitext", "")).splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        text, count = line, default
+        if "|" in line:
+            left, right = line.rsplit("|", 1)
+            n = parse_int(right, 0)
+            if n > 0 and left.strip():
+                text, count = left.strip(), min(999, n)
+        items.extend([text] * count)
+    return items
+
+
 def build_items(opts):
+    if opts.get("mode") == "freitext":
+        return build_freitext_items(opts)
     letters = [s.strip().upper() for s in opts["letters"].split(",") if s.strip()]
     r1 = make_range(opts["n1from"], opts["n1to"])
     r2 = make_range(opts["n2from"], opts["n2to"])
@@ -439,6 +460,7 @@ def print_sheets(printer_name, sheets, opts, devmode=None):
         })
 
     big = font(float(opts["fontsize"] or 36))
+    tmp_fonts = []                                             # verkleinerte Freitext-Schriften
     cutline = max(1, int(round(0.25 / 25.4 * dpi_x)))          # Schnittrahmen (Test)
     border = max(1, int(round(BORDER_LINE / 25.4 * dpi_x)))    # gedruckte Umrandung
 
@@ -446,6 +468,16 @@ def print_sheets(printer_name, sheets, opts, devmode=None):
         for rect in ((l, t, r, t + thickness), (l, b - thickness, r, b),
                      (l, t, l + thickness, b), (r - thickness, t, r, b)):
             hdc.FillSolidRect(rect, 0)
+
+    def draw_barcode(bars, total, y0):
+        if not bars:
+            return
+        bc_w = total * BC_MODULE
+        bc_x = MARGIN_LEFT + (LABEL_W - bc_w) / 2              # mittig
+        for start, width in bars:
+            hdc.FillSolidRect((px(bc_x + start * BC_MODULE), py(y0),
+                               px(bc_x + (start + width) * BC_MODULE),
+                               py(y0 + BC_HEIGHT)), 0)
 
     hdc.StartDoc("Lager-Etiketten")
     try:
@@ -460,7 +492,6 @@ def print_sheets(printer_name, sheets, opts, devmode=None):
                 if item is None:
                     continue
 
-                letter, n1, n2 = item
                 if opts.get("border"):
                     frame(px(MARGIN_LEFT + BORDER_INSET), py(top + BORDER_INSET),
                           px(MARGIN_LEFT + LABEL_W - BORDER_INSET),
@@ -468,6 +499,24 @@ def print_sheets(printer_name, sheets, opts, devmode=None):
 
                 area_l = MARGIN_LEFT + PAD_X
                 area_r = MARGIN_LEFT + LABEL_W - PAD_X
+
+                if isinstance(item, str):          # Freitext, mittig auf dem Etikett
+                    bars, total = (code128_bars(item) if opts.get("ftbarcode")
+                                   else (None, 0))
+                    hdc.SelectObject(big)
+                    tw, th = hdc.GetTextExtent(item)
+                    avail = px(area_r) - px(area_l)
+                    if 0 < avail < tw:             # zu breit -> passend verkleinern
+                        small = font(float(opts["fontsize"] or 36) * avail / tw)
+                        tmp_fonts.append(small)
+                        hdc.SelectObject(small)
+                        tw, th = hdc.GetTextExtent(item)
+                    ty = py(top + LABEL_H / 2) - th // 2
+                    hdc.TextOut(px((area_l + area_r) / 2) - tw // 2, ty, item)
+                    draw_barcode(bars, total, top + LABEL_H - BC_BOTTOM - BC_HEIGHT)
+                    continue
+
+                letter, n1, n2 = item
                 use_bc, bc_top, text_cy = label_layout(opts, letter)
 
                 hdc.SelectObject(big)
@@ -482,13 +531,7 @@ def print_sheets(printer_name, sheets, opts, devmode=None):
 
                 if use_bc:
                     bars, total = code128_bars(letter + n1 + n2)
-                    bc_w = total * BC_MODULE
-                    bc_x = MARGIN_LEFT + (LABEL_W - bc_w) / 2             # mittig darunter
-                    y0 = top + bc_top
-                    for start, width in bars:
-                        hdc.FillSolidRect((px(bc_x + start * BC_MODULE), py(y0),
-                                           px(bc_x + (start + width) * BC_MODULE),
-                                           py(y0 + BC_HEIGHT)), 0)
+                    draw_barcode(bars, total, top + bc_top)
             hdc.EndPage()
         hdc.EndDoc()
     except Exception:
@@ -512,8 +555,12 @@ class App(tk.Tk):
         self.tray_fields = {}   # je Drucker: gemerkte Fach-/Papier-Einstellungen
         self.sign_index = 0
         self.sign_texts = []
+        self.freitext_saved = ""
 
         self.vars = {
+            "mode":     tk.StringVar(value="serie"),
+            "ftcount":  tk.StringVar(value="1"),
+            "ftbarcode": tk.BooleanVar(value=False),
             "letters":  tk.StringVar(value="K,A"),
             "n1from":   tk.StringVar(value="1"),
             "n1to":     tk.StringVar(value="20"),
@@ -558,6 +605,8 @@ class App(tk.Tk):
     def opts(self):
         o = {k: (v.get() if not isinstance(v, tk.BooleanVar) else bool(v.get()))
              for k, v in self.vars.items()}
+        o["freitext"] = (self.freitext_text.get("1.0", "end")
+                         if hasattr(self, "freitext_text") else self.freitext_saved)
         return o
 
     def load_settings(self):
@@ -565,6 +614,7 @@ class App(tk.Tk):
             with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
             self.tray_fields = data.get("trays", {})
+            self.freitext_saved = str(data.get("freitext", ""))
             for k, v in data.items():
                 if k in self.vars:
                     self.vars[k].set(v)
@@ -606,28 +656,21 @@ class App(tk.Tk):
             widget_fn(row + 1)
 
         r = 0
-        ttk.Label(frame, text="Buchstabe(n), mehrere mit Komma:").grid(row=r, column=0, sticky="w")
-        ttk.Entry(frame, textvariable=self.vars["letters"], width=14).grid(row=r + 1, column=0, sticky="w")
-        r += 2
+        mode_row = ttk.Frame(frame)
+        mode_row.grid(row=r, column=0, sticky="w"); r += 1
+        ttk.Radiobutton(mode_row, text="Serie (Buchstabe + Zahlen)", value="serie",
+                        variable=self.vars["mode"]).pack(side="left")
+        ttk.Radiobutton(mode_row, text="Freitext", value="freitext",
+                        variable=self.vars["mode"]).pack(side="left", padx=(14, 0))
 
-        def range_row(row, key):
-            box = ttk.Frame(frame)
-            box.grid(row=row, column=0, sticky="w")
-            ttk.Spinbox(box, from_=0, to=999, textvariable=self.vars[key + "from"], width=5).pack(side="left")
-            ttk.Label(box, text=" – ").pack(side="left")
-            ttk.Spinbox(box, from_=0, to=999, textvariable=self.vars[key + "to"], width=5).pack(side="left")
-
-        group(r, "1. Zahl (z. B. Feld) von – bis:", lambda row: range_row(row, "n1")); r += 2
-        group(r, "2. Zahl (z. B. Ebene) von – bis:", lambda row: range_row(row, "n2")); r += 2
-
-        ttk.Label(frame, text="Reihenfolge:").grid(row=r, column=0, sticky="w", pady=(8, 1)); r += 1
-        self.order_box = ttk.Combobox(frame, state="readonly", width=34, values=[
-            "Buchstaben zusammen (K 01, A 01, K 02 …)",
-            "Nacheinander (erst alle K, dann alle A)"])
-        self.order_box.current(0 if self.vars["order"].get() == "pair" else 1)
-        self.order_box.grid(row=r, column=0, sticky="w"); r += 1
-        self.order_box.bind("<<ComboboxSelected>>", lambda e: self.vars["order"].set(
-            "pair" if self.order_box.current() == 0 else "seq"))
+        # Serie und Freitext teilen sich dieselbe Zeile – es ist immer nur einer sichtbar
+        self.series_frame = ttk.Frame(frame)
+        self.series_frame.grid(row=r, column=0, sticky="w")
+        self.freitext_frame = ttk.Frame(frame)
+        self.freitext_frame.grid(row=r, column=0, sticky="w"); r += 1
+        self.build_series_box(self.series_frame)
+        self.build_freitext_box(self.freitext_frame)
+        self.update_mode_frames()
 
         def small_row(row, items):
             box = ttk.Frame(frame)
@@ -650,13 +693,6 @@ class App(tk.Tk):
             ("X", "offx", 4, None),
             ("Y", "offy", 4, None)])); r += 2
 
-        bc_row = ttk.Frame(frame)
-        bc_row.grid(row=r, column=0, sticky="w", pady=(10, 0)); r += 1
-        ttk.Checkbutton(bc_row, text="Barcode (Code 128) darunter, nur bei:",
-                        variable=self.vars["barcode"]).pack(side="left")
-        ttk.Entry(bc_row, textvariable=self.vars["bcletters"], width=6).pack(side="left", padx=(4, 0))
-        ttk.Label(frame, text="(leer = Barcode auf allen Etiketten)",
-                  foreground="#777").grid(row=r, column=0, sticky="w", padx=(20, 0)); r += 1
         ttk.Checkbutton(frame, text="Umrandung auf Etikett drucken",
                         variable=self.vars["border"]).grid(row=r, column=0, sticky="w"); r += 1
         ttk.Checkbutton(frame, text="Schnittrahmen andrucken (Test auf Normalpapier)",
@@ -695,6 +731,75 @@ class App(tk.Tk):
         self.canvas = tk.Canvas(right, width=int(PAGE_W * s), height=int(PAGE_H * s),
                                 bg="white", highlightthickness=1, highlightbackground="#999")
         self.canvas.pack(pady=(6, 0))
+
+    def build_series_box(self, box):
+        r = 0
+        ttk.Label(box, text="Buchstabe(n), mehrere mit Komma:").grid(row=r, column=0, sticky="w", pady=(8, 1)); r += 1
+        ttk.Entry(box, textvariable=self.vars["letters"], width=14).grid(row=r, column=0, sticky="w"); r += 1
+
+        def range_row(key, label):
+            nonlocal r
+            ttk.Label(box, text=label).grid(row=r, column=0, sticky="w", pady=(8, 1)); r += 1
+            row = ttk.Frame(box)
+            row.grid(row=r, column=0, sticky="w"); r += 1
+            ttk.Spinbox(row, from_=0, to=999, textvariable=self.vars[key + "from"], width=5).pack(side="left")
+            ttk.Label(row, text=" – ").pack(side="left")
+            ttk.Spinbox(row, from_=0, to=999, textvariable=self.vars[key + "to"], width=5).pack(side="left")
+
+        range_row("n1", "1. Zahl (z. B. Feld) von – bis:")
+        range_row("n2", "2. Zahl (z. B. Ebene) von – bis:")
+
+        ttk.Label(box, text="Reihenfolge:").grid(row=r, column=0, sticky="w", pady=(8, 1)); r += 1
+        self.order_box = ttk.Combobox(box, state="readonly", width=34, values=[
+            "Buchstaben zusammen (K 01, A 01, K 02 …)",
+            "Nacheinander (erst alle K, dann alle A)"])
+        self.order_box.current(0 if self.vars["order"].get() == "pair" else 1)
+        self.order_box.grid(row=r, column=0, sticky="w"); r += 1
+        self.order_box.bind("<<ComboboxSelected>>", lambda e: self.vars["order"].set(
+            "pair" if self.order_box.current() == 0 else "seq"))
+
+        bc_row = ttk.Frame(box)
+        bc_row.grid(row=r, column=0, sticky="w", pady=(10, 0)); r += 1
+        ttk.Checkbutton(bc_row, text="Barcode (Code 128) darunter, nur bei:",
+                        variable=self.vars["barcode"]).pack(side="left")
+        ttk.Entry(bc_row, textvariable=self.vars["bcletters"], width=6).pack(side="left", padx=(4, 0))
+        ttk.Label(box, text="(leer = Barcode auf allen Etiketten)",
+                  foreground="#777").grid(row=r, column=0, sticky="w", padx=(20, 0)); r += 1
+
+    def build_freitext_box(self, box):
+        r = 0
+        ttk.Label(box, text="Texte – je Zeile ein Etikett:").grid(row=r, column=0, sticky="w", pady=(8, 1)); r += 1
+        self.freitext_text = tk.Text(box, width=36, height=6, undo=True)
+        self.freitext_text.grid(row=r, column=0, sticky="w"); r += 1
+        if self.freitext_saved.strip():
+            self.freitext_text.insert("1.0", self.freitext_saved.rstrip("\n"))
+        self.freitext_text.edit_modified(False)
+        self.freitext_text.bind("<<Modified>>", self.on_freitext_change)
+
+        row = ttk.Frame(box)
+        row.grid(row=r, column=0, sticky="w", pady=(8, 0)); r += 1
+        ttk.Label(row, text="Anzahl je Text:").pack(side="left", padx=(0, 4))
+        ttk.Spinbox(row, from_=1, to=999, textvariable=self.vars["ftcount"], width=5).pack(side="left")
+
+        ttk.Label(box, text="Abweichende Anzahl je Zeile mit senkrechtem Strich,\n"
+                            "z. B.:  Reserviert Werkstatt | 8",
+                  foreground="#777", justify="left").grid(row=r, column=0, sticky="w", pady=(2, 0)); r += 1
+
+        ttk.Checkbutton(box, text="Barcode (Code 128) mit dem Text darunter",
+                        variable=self.vars["ftbarcode"]).grid(row=r, column=0, sticky="w", pady=(8, 0)); r += 1
+
+    def update_mode_frames(self):
+        if self.vars["mode"].get() == "freitext":
+            self.series_frame.grid_remove()
+            self.freitext_frame.grid()
+        else:
+            self.freitext_frame.grid_remove()
+            self.series_frame.grid()
+
+    def on_freitext_change(self, _event=None):
+        if self.freitext_text.edit_modified():
+            self.freitext_text.edit_modified(False)
+            self.refresh()
 
     # ---------------- Reiter 2: Regalschilder (3D-Druck)
     SIGN_PREVIEW = 470  # Vorschau-Kantenlänge in Pixeln
@@ -1004,12 +1109,19 @@ class App(tk.Tk):
     # ---------------- Aktualisieren
     def refresh(self):
         opts = self.opts()
+        if hasattr(self, "series_frame"):
+            self.update_mode_frames()
         items = build_items(opts)
         self.sheets = build_sheets(items, opts["startpos"])
         self.page_index = min(self.page_index, len(self.sheets) - 1)
 
         rest = (parse_int(opts["startpos"], 1) - 1 + len(items)) % PER_SHEET
         note = f" – letzter Bogen: {PER_SHEET - rest} Etikett(en) frei." if rest else ""
+        if opts.get("mode") == "freitext" and opts.get("ftbarcode"):
+            bad = [t for t in dict.fromkeys(items) if code128_bars(t)[0] is None]
+            if bad:
+                note += ("\n⚠ Kein Barcode möglich (Umlaut/Sonderzeichen): "
+                         + ", ".join(bad[:4]) + ("…" if len(bad) > 4 else ""))
         self.info.config(text=f"{len(items)} Etiketten auf {len(self.sheets)} Bogen/Bögen{note}")
         self.draw_preview()
         self.save_settings()
@@ -1026,7 +1138,20 @@ class App(tk.Tk):
         self.page_label.config(text=f"Seite {self.page_index + 1}/{len(self.sheets)}")
 
         font_mm = parse_int(opts["fontsize"], 36)
-        big = ("Arial", -max(6, int(font_mm * s)), "bold")
+        big_px = max(6, int(font_mm * s))
+        big = ("Arial", -big_px, "bold")
+        measure = tkfont.Font(family="Arial", size=-big_px, weight="bold")
+
+        def draw_bars(bars, total, y0_mm):
+            if not bars:
+                return
+            bc_w = total * BC_MODULE * s
+            bc_x = (MARGIN_LEFT + LABEL_W / 2) * s - bc_w / 2
+            y0 = y0_mm * s
+            for start, width in bars:
+                c.create_rectangle(bc_x + start * BC_MODULE * s, y0,
+                                   bc_x + (start + width) * BC_MODULE * s,
+                                   y0 + BC_HEIGHT * s, fill="black", width=0)
 
         for pos, item in enumerate(self.sheets[self.page_index]):
             top = MARGIN_TOP + pos * LABEL_H
@@ -1035,7 +1160,6 @@ class App(tk.Tk):
             c.create_rectangle(l, t, rr, b, outline="#bbb", dash=(3, 3))
             if item is None:
                 continue
-            letter, n1, n2 = item
             if opts.get("border"):
                 c.create_rectangle(l + BORDER_INSET * s, t + BORDER_INSET * s,
                                    rr - BORDER_INSET * s, b - BORDER_INSET * s,
@@ -1043,6 +1167,21 @@ class App(tk.Tk):
 
             area_l = (MARGIN_LEFT + PAD_X) * s
             area_r = (MARGIN_LEFT + LABEL_W - PAD_X) * s
+
+            if isinstance(item, str):          # Freitext, mittig auf dem Etikett
+                fnt = big
+                tw = measure.measure(item)
+                avail = area_r - area_l
+                if 0 < avail < tw:             # zu breit -> passend verkleinern
+                    fnt = ("Arial", -max(6, int(big_px * avail / tw)), "bold")
+                c.create_text((area_l + area_r) / 2, (top + LABEL_H / 2) * s,
+                              text=item, font=fnt, anchor="center")
+                if opts.get("ftbarcode"):
+                    bars, total = code128_bars(item)
+                    draw_bars(bars, total, top + LABEL_H - BC_BOTTOM - BC_HEIGHT)
+                continue
+
+            letter, n1, n2 = item
             use_bc, bc_top, text_cy = label_layout(opts, letter)
             cy = (top + text_cy) * s
 
@@ -1052,13 +1191,7 @@ class App(tk.Tk):
 
             if use_bc:
                 bars, total = code128_bars(letter + n1 + n2)
-                bc_w = total * BC_MODULE * s
-                bc_x = (MARGIN_LEFT + LABEL_W / 2) * s - bc_w / 2
-                y0 = (top + bc_top) * s
-                for start, width in bars:
-                    c.create_rectangle(bc_x + start * BC_MODULE * s, y0,
-                                       bc_x + (start + width) * BC_MODULE * s,
-                                       y0 + BC_HEIGHT * s, fill="black", width=0)
+                draw_bars(bars, total, top + bc_top)
 
     # ---------------- Drucken
     def do_print(self, sheets=None, force_frames=False):
