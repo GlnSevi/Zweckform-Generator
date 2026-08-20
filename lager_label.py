@@ -5,14 +5,22 @@ A4-Bogen, 4 Etiketten je 192 x 61 mm.
 
 GUI (tkinter) mit Vorschau und Direktdruck über Windows GDI (pywin32),
 damit die Positionen millimetergenau auf dem Etikettenbogen landen.
+
+Zweiter Reiter „Regalschilder (3D-Druck)“: große Schilder (Standard
+300 × 300 mm) zur Regal-Markierung als STL-Datei für den 3D-Drucker.
+Die Zahl wird als Vertiefung in die Platte eingelassen, damit sie sich
+nach dem Druck sauber ausmalen bzw. per Filamentwechsel einfärben lässt.
 """
 
 import ctypes
 import json
+import math
 import os
+import re
+import struct
 import sys
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, filedialog, messagebox
 
 try:
     import win32con
@@ -22,8 +30,14 @@ try:
 except ImportError:
     win32con = win32gui = win32print = win32ui = None
 
+try:
+    import manifold3d as m3d
+    import numpy as np
+except ImportError:
+    m3d = np = None
+
 APP_ID = "Kunzer.LagerLabel.Etiketten"
-APP_TITLE = "Lager-Etiketten – Zweckform L4761 (192 × 61 mm)"
+APP_TITLE = "Lager-Etiketten & Regalschilder – Kunzer"
 SETTINGS_FILE = os.path.join(os.environ.get("APPDATA", "."), "LagerLabel", "settings.json")
 
 # ---------------------------------------------------------------- Bogen-Maße (mm)
@@ -142,6 +156,257 @@ def label_layout(opts, letter):
     return use_bc, bc_top, LABEL_H / 2
 
 
+# ---------------------------------------------------------------- Regalschilder (STL / 3D-Druck)
+SIGN_FONT_NAME = "Arial"
+SIGN_FONT_UNITS = 1024      # interne Auflösung der Schrift-Umrisse (Font-Einheiten)
+SIGN_BORDER_INSET = 12.0    # mm: Abstand des eingefrästen Rahmens zur Plattenkante
+SIGN_BORDER_LINE = 6.0      # mm: Breite des eingefrästen Rahmens
+SIGN_TEXT_GAP = 10.0        # mm: Mindestabstand der Zahl zu Rahmen bzw. Kante
+SIGN_MIN_FLOOR = 0.4        # mm: Restboden, damit die Vertiefung nie durchbricht
+SIGN_HOLE_D = 6.0           # mm: Durchmesser der Aufhänge-Löcher oben
+SIGN_CORNER_SEGS = 12       # Liniensegmente je 90°-Eckenrundung
+
+_sign_contour_cache = {}
+
+
+def parse_float(value, default=0.0):
+    """Zahl mit Punkt ODER Komma (deutsche Eingabe) lesen."""
+    try:
+        return float(str(value).strip().replace(",", "."))
+    except (TypeError, ValueError):
+        return default
+
+
+def fmt(value):
+    """Zahl fürs Anzeigen: kompakt und mit Komma (deutsch)."""
+    return f"{value:g}".replace(".", ",")
+
+
+def rounded_rect(x0, y0, x1, y1, radius, segs=SIGN_CORNER_SEGS):
+    """Rechteck-Umriss (x0,y0)–(x1,y1) mit abgerundeten Ecken, gegen den Uhrzeigersinn."""
+    r = max(0.0, min(radius, (x1 - x0) / 2, (y1 - y0) / 2))
+    if r <= 1e-9:
+        return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+    pts = []
+    corners = [((x0 + r, y0 + r), 180.0), ((x1 - r, y0 + r), 270.0),
+               ((x1 - r, y1 - r), 0.0), ((x0 + r, y1 - r), 90.0)]
+    for (mx, my), start in corners:
+        for i in range(segs + 1):
+            ang = math.radians(start + 90.0 * i / segs)
+            pts.append((mx + r * math.cos(ang), my + r * math.sin(ang)))
+    return pts
+
+
+def circle_poly(cx, cy, r, segs=32):
+    return [(cx + r * math.cos(2 * math.pi * i / segs),
+             cy + r * math.sin(2 * math.pi * i / segs)) for i in range(segs)]
+
+
+def sign_hole_contours(o):
+    """Zwei Durchgangslöcher in den oberen Ecken (zum Anschrauben/Aufhängen).
+
+    Die Löcher sitzen auf der Ecken-Diagonale mittig im Randstreifen vor dem
+    Rahmen – so weichen sie Abrundung und eingefrästem Rahmen automatisch aus.
+    """
+    if not o["holes"]:
+        return []
+    w, h = o["width"], o["height"]
+    rc = min(o["radius"], w / 2, h / 2)
+    band = SIGN_BORDER_INSET / 2
+    m = max(band, rc - (rc - band) / math.sqrt(2))
+    return [circle_poly(m, h - m, SIGN_HOLE_D / 2),
+            circle_poly(w - m, h - m, SIGN_HOLE_D / 2)]
+
+
+def sign_text_contours(text):
+    """Umriss-Polygone des Textes (Arial fett) in Font-Einheiten, y nach unten.
+
+    Nutzt den GDI-Pfad (BeginPath/ExtTextOut/FlattenPath/GetPath), dadurch
+    sind keine zusätzlichen Bibliotheken nötig – pywin32 ist ohnehin dabei.
+    """
+    key = text
+    if key in _sign_contour_cache:
+        return _sign_contour_cache[key]
+
+    hdc_screen = win32gui.GetDC(0)
+    hdc = win32gui.CreateCompatibleDC(hdc_screen)
+    lf = win32gui.LOGFONT()
+    lf.lfFaceName = SIGN_FONT_NAME
+    lf.lfHeight = -SIGN_FONT_UNITS
+    lf.lfWeight = 700
+    hfont = win32gui.CreateFontIndirect(lf)
+    old_font = win32gui.SelectObject(hdc, hfont)
+    try:
+        win32gui.SetBkMode(hdc, win32con.TRANSPARENT)
+        win32gui.BeginPath(hdc)
+        win32gui.ExtTextOut(hdc, 0, 0, 0, None, text)
+        win32gui.EndPath(hdc)
+        win32gui.FlattenPath(hdc)     # Kurven -> Liniensegmente
+        points, types = win32gui.GetPath(hdc)
+    finally:
+        win32gui.SelectObject(hdc, old_font)
+        win32gui.DeleteObject(hfont)
+        win32gui.DeleteDC(hdc)
+        win32gui.ReleaseDC(0, hdc_screen)
+
+    contours, current = [], []
+    for (x, y), t in zip(points, types):
+        if t & ~win32con.PT_CLOSEFIGURE == win32con.PT_MOVETO:
+            if len(current) >= 3:
+                contours.append(current)
+            current = [(float(x), float(y))]
+        else:
+            current.append((float(x), float(y)))
+    if len(current) >= 3:
+        contours.append(current)
+
+    cleaned = []
+    for poly in contours:
+        if len(poly) > 1 and poly[0] == poly[-1]:
+            poly = poly[:-1]
+        # doppelte Nachbarpunkte entfernen
+        slim = [p for i, p in enumerate(poly) if p != poly[i - 1]]
+        if len(slim) >= 3:
+            cleaned.append(slim)
+    _sign_contour_cache[key] = cleaned
+    return cleaned
+
+
+def _contour_bounds(contours):
+    xs = [x for poly in contours for x, _ in poly]
+    ys = [y for poly in contours for _, y in poly]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def sign_digit_ref_height():
+    """Höhe der Ziffer „0“ in Font-Einheiten – Bezug für „Schrifthöhe (mm)“.
+
+    So sind die Ziffern auf allen Schildern gleich groß, egal ob 1 oder 88.
+    """
+    x0, y0, x1, y1 = _contour_bounds(sign_text_contours("0"))
+    return max(1.0, y1 - y0)
+
+
+def sign_engrave_contours(text, o):
+    """Alle einzufräsenden Umrisse in Platten-Millimetern (x rechts, y nach oben)."""
+    w, h = o["width"], o["height"]
+    contours = []
+
+    if o["border"]:
+        a = SIGN_BORDER_INSET
+        b = SIGN_BORDER_INSET + SIGN_BORDER_LINE
+        if w > 2 * (b + 5) and h > 2 * (b + 5):
+            rc = min(o["radius"], w / 2, h / 2)
+            contours.append(rounded_rect(a, a, w - a, h - a, rc - a))
+            contours.append(rounded_rect(b, b, w - b, h - b, rc - b))
+
+    glyphs = sign_text_contours(text)
+    if glyphs:
+        scale = o["fontmm"] / sign_digit_ref_height()
+        x0, y0, x1, y1 = _contour_bounds(glyphs)
+        text_w, text_h = (x1 - x0) * scale, (y1 - y0) * scale
+
+        inset = SIGN_TEXT_GAP + (SIGN_BORDER_INSET + SIGN_BORDER_LINE if o["border"] else 0)
+        avail_w = max(10.0, w - 2 * inset)
+        avail_h = max(10.0, h - 2 * inset)
+        if text_w > avail_w or text_h > avail_h:      # zu breit -> passend verkleinern
+            scale *= min(avail_w / text_w, avail_h / text_h)
+            text_w, text_h = (x1 - x0) * scale, (y1 - y0) * scale
+
+        # zentrieren; GDI zählt y nach unten, die Platte nach oben -> spiegeln
+        off_x = (w - text_w) / 2 - x0 * scale
+        off_y = (h - text_h) / 2 + y1 * scale
+        for poly in glyphs:
+            contours.append([(x * scale + off_x, off_y - y * scale) for x, y in poly])
+    return contours
+
+
+def build_sign_mesh(text, o):
+    """Komplettes Dreiecksnetz eines Schildes (Platte + eingefräste Zahl).
+
+    Wie in der Modula-Karten-App: Platte, Löcher und Vertiefung werden als
+    Volumenkörper mit echten Booleschen Operationen (manifold3d) verrechnet.
+    Das Netz ist dadurch garantiert wasserdicht und alle Konturen geschlossen –
+    wichtig, damit der Slicer die Vertiefung sauber zum Einfärben druckt.
+    """
+    w, h, t = o["width"], o["height"], o["thick"]
+    depth = min(o["depth"], t - SIGN_MIN_FLOOR)
+
+    def cross_section(contours):
+        return m3d.CrossSection([np.asarray(c, dtype=np.float64) for c in contours],
+                                m3d.FillRule.EvenOdd)
+
+    plate = cross_section([rounded_rect(0.0, 0.0, w, h, o["radius"])]
+                          + sign_hole_contours(o)).extrude(t)
+
+    engrave = sign_engrave_contours(text, o) if depth > 0 else []
+    if engrave:
+        cutter = cross_section(engrave).extrude(depth + 1.0)   # ragt oben 1 mm heraus
+        plate = plate - cutter.translate((0.0, 0.0, t - depth))
+
+    if plate.is_empty() or plate.status() != m3d.Error.NoError:
+        raise RuntimeError("Boolesche Verrechnung ergab ein ungültiges Netz.")
+
+    mesh = plate.to_mesh()
+    verts = np.asarray(mesh.vert_properties, dtype=np.float64)[:, :3]
+    tris = []
+    for i0, i1, i2 in np.asarray(mesh.tri_verts):
+        tris.append((tuple(verts[i0]), tuple(verts[i1]), tuple(verts[i2])))
+    return tris
+
+
+def write_binary_stl(path, tris):
+    """Binäre STL-Datei schreiben (kompakt, von jedem Slicer lesbar)."""
+
+    def normal(a, b, c):
+        ux, uy, uz = b[0] - a[0], b[1] - a[1], b[2] - a[2]
+        vx, vy, vz = c[0] - a[0], c[1] - a[1], c[2] - a[2]
+        nx, ny, nz = uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx
+        length = (nx * nx + ny * ny + nz * nz) ** 0.5
+        if length < 1e-12:
+            return None
+        return nx / length, ny / length, nz / length
+
+    with open(path, "wb") as f:
+        f.write(b"Kunzer Regalschild (Lager-Etiketten App)".ljust(80, b" "))
+        f.write(struct.pack("<I", 0))          # Platzhalter, wird unten korrigiert
+        count = 0
+        for a, b, c in tris:
+            n = normal(a, b, c)
+            if n is None:                      # entartete Dreiecke überspringen
+                continue
+            f.write(struct.pack("<12fH", *n, *a, *b, *c, 0))
+            count += 1
+        f.seek(80)
+        f.write(struct.pack("<I", count))
+    return count
+
+
+def point_in_polygon(x, y, poly):
+    inside = False
+    n = len(poly)
+    for i in range(n):
+        x1, y1 = poly[i]
+        x2, y2 = poly[(i + 1) % n]
+        if (y1 > y) != (y2 > y):
+            if x < x1 + (x2 - x1) * (y - y1) / (y2 - y1):
+                inside = not inside
+    return inside
+
+
+def contour_depths(contours):
+    """Verschachtelungstiefe jedes Umrisses (gerade = Vertiefung, ungerade = Insel)."""
+    depths = []
+    for i, poly in enumerate(contours):
+        x, y = poly[0]
+        d = 0
+        for j, other in enumerate(contours):
+            if j != i and point_in_polygon(x, y, other):
+                d += 1
+        depths.append(d)
+    return depths
+
+
 # ---------------------------------------------------------------- Druck (GDI)
 def print_sheets(printer_name, sheets, opts, devmode=None):
     if devmode is not None:
@@ -245,6 +510,8 @@ class App(tk.Tk):
         self.sheets = [[None] * PER_SHEET]
         self.devmodes = {}      # je Drucker: DEVMODE aus dem Einstellungs-Dialog
         self.tray_fields = {}   # je Drucker: gemerkte Fach-/Papier-Einstellungen
+        self.sign_index = 0
+        self.sign_texts = []
 
         self.vars = {
             "letters":  tk.StringVar(value="K,A"),
@@ -264,11 +531,28 @@ class App(tk.Tk):
             "frames":   tk.BooleanVar(value=False),
             "printer":  tk.StringVar(value=""),
         }
+        self.svars = {                       # Reiter „Regalschilder (3D-Druck)“
+            "s_prefix": tk.StringVar(value=""),
+            "s_from":   tk.StringVar(value="1"),
+            "s_to":     tk.StringVar(value="1"),
+            "s_pad":    tk.StringVar(value="2"),
+            "s_fontmm": tk.StringVar(value="160"),
+            "s_width":  tk.StringVar(value="300"),
+            "s_height": tk.StringVar(value="300"),
+            "s_thick":  tk.StringVar(value="4"),
+            "s_depth":  tk.StringVar(value="0,6"),
+            "s_radius": tk.StringVar(value="20"),
+            "s_border": tk.BooleanVar(value=True),
+            "s_holes":  tk.BooleanVar(value=True),
+        }
         self.load_settings()
         self.build_ui()
         for var in self.vars.values():
             var.trace_add("write", lambda *_: self.refresh())
+        for var in self.svars.values():
+            var.trace_add("write", lambda *_: self.refresh_signs())
         self.refresh()
+        self.refresh_signs()
 
     # ---------------- Einstellungen
     def opts(self):
@@ -284,6 +568,8 @@ class App(tk.Tk):
             for k, v in data.items():
                 if k in self.vars:
                     self.vars[k].set(v)
+                elif k in self.svars:
+                    self.svars[k].set(v)
         except Exception:
             pass
 
@@ -291,6 +577,8 @@ class App(tk.Tk):
         try:
             os.makedirs(os.path.dirname(SETTINGS_FILE), exist_ok=True)
             data = self.opts()
+            for k, v in self.svars.items():
+                data[k] = bool(v.get()) if isinstance(v, tk.BooleanVar) else v.get()
             data["trays"] = self.tray_fields
             with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
@@ -299,7 +587,18 @@ class App(tk.Tk):
 
     # ---------------- Oberfläche
     def build_ui(self):
-        frame = ttk.Frame(self, padding=12)
+        self.notebook = ttk.Notebook(self)
+        self.notebook.pack(fill="both", expand=True, padx=4, pady=4)
+        tab_labels = ttk.Frame(self.notebook)
+        tab_signs = ttk.Frame(self.notebook)
+        self.notebook.add(tab_labels, text="  Etiketten (Papier)  ")
+        self.notebook.add(tab_signs, text="  Regalschilder (3D-Druck)  ")
+        self.build_label_tab(tab_labels)
+        self.build_sign_tab(tab_signs)
+
+    # ---------------- Reiter 1: Etiketten (Papier)
+    def build_label_tab(self, parent):
+        frame = ttk.Frame(parent, padding=12)
         frame.grid(row=0, column=0, sticky="ns")
 
         def group(row, text, widget_fn):
@@ -383,7 +682,7 @@ class App(tk.Tk):
                    command=self.do_test_print).pack(side="left", padx=(8, 0))
 
         # ---------------- Vorschau
-        right = ttk.Frame(self, padding=(0, 12, 12, 12))
+        right = ttk.Frame(parent, padding=(0, 12, 12, 12))
         right.grid(row=0, column=1, sticky="n")
         nav = ttk.Frame(right)
         nav.pack()
@@ -396,6 +695,231 @@ class App(tk.Tk):
         self.canvas = tk.Canvas(right, width=int(PAGE_W * s), height=int(PAGE_H * s),
                                 bg="white", highlightthickness=1, highlightbackground="#999")
         self.canvas.pack(pady=(6, 0))
+
+    # ---------------- Reiter 2: Regalschilder (3D-Druck)
+    SIGN_PREVIEW = 470  # Vorschau-Kantenlänge in Pixeln
+
+    def build_sign_tab(self, parent):
+        form = ttk.Frame(parent, padding=12)
+        form.grid(row=0, column=0, sticky="ns")
+        r = 0
+
+        ttk.Label(form, text="Große Schilder zum Markieren der Regale – als STL-Datei "
+                             "für den 3D-Drucker. Die Zahl wird vertieft eingelassen "
+                             "und lässt sich so sauber einfärben.",
+                  wraplength=280, foreground="#444").grid(row=r, column=0, sticky="w"); r += 1
+
+        ttk.Label(form, text="Buchstabe davor (optional):").grid(row=r, column=0, sticky="w", pady=(10, 1)); r += 1
+        ttk.Entry(form, textvariable=self.svars["s_prefix"], width=8).grid(row=r, column=0, sticky="w"); r += 1
+
+        ttk.Label(form, text="Zahl von – bis (je Zahl ein Schild):").grid(row=r, column=0, sticky="w", pady=(8, 1)); r += 1
+        box = ttk.Frame(form)
+        box.grid(row=r, column=0, sticky="w"); r += 1
+        ttk.Spinbox(box, from_=0, to=999, textvariable=self.svars["s_from"], width=5).pack(side="left")
+        ttk.Label(box, text=" – ").pack(side="left")
+        ttk.Spinbox(box, from_=0, to=999, textvariable=self.svars["s_to"], width=5).pack(side="left")
+
+        def pair_row(label, items, pady=(8, 1)):
+            nonlocal r
+            ttk.Label(form, text=label).grid(row=r, column=0, sticky="w", pady=pady); r += 1
+            row = ttk.Frame(form)
+            row.grid(row=r, column=0, sticky="w"); r += 1
+            for text, key, width, values in items:
+                ttk.Label(row, text=text).pack(side="left", padx=(0, 3))
+                if values:
+                    ttk.Combobox(row, state="readonly", width=width, values=values,
+                                 textvariable=self.svars[key]).pack(side="left", padx=(0, 10))
+                else:
+                    ttk.Entry(row, textvariable=self.svars[key], width=width).pack(side="left", padx=(0, 10))
+
+        pair_row("Führende Nullen / Schrifthöhe:", [
+            ("Stellen", "s_pad", 3, ["1", "2", "3"]),
+            ("Schrift (mm)", "s_fontmm", 5, None)])
+        pair_row("Platte Breite × Höhe / Ecken-Radius (mm):", [
+            ("Breite", "s_width", 5, None),
+            ("Höhe", "s_height", 5, None),
+            ("Radius", "s_radius", 4, None)])
+        pair_row("Dicke / Vertiefung der Zahl (mm):", [
+            ("Dicke", "s_thick", 5, None),
+            ("Vertiefung", "s_depth", 5, None)])
+
+        ttk.Label(form, text="Tipp: 0,6 mm Vertiefung = 3 Druckschichten à 0,2 mm – "
+                             "ideal zum Ausmalen oder für einen Filament-Farbwechsel. "
+                             "Weniger als eine Schichthöhe (ca. 0,2 mm) ist im Druck "
+                             "nicht sichtbar.",
+                  wraplength=280, foreground="#777").grid(row=r, column=0, sticky="w", pady=(4, 0)); r += 1
+
+        ttk.Checkbutton(form, text="Rahmen mit einfräsen (wie auf den Etiketten)",
+                        variable=self.svars["s_border"]).grid(row=r, column=0, sticky="w", pady=(8, 0)); r += 1
+        ttk.Checkbutton(form, text=f"Lochung oben: 2 Löcher (Ø {fmt(SIGN_HOLE_D)} mm) in den Ecken",
+                        variable=self.svars["s_holes"]).grid(row=r, column=0, sticky="w", pady=(4, 0)); r += 1
+
+        self.sign_info = ttk.Label(form, text="", wraplength=280, foreground="#444")
+        self.sign_info.grid(row=r, column=0, sticky="w", pady=(10, 6)); r += 1
+
+        ttk.Button(form, text="💾 STL-Datei(en) erstellen…",
+                   command=self.do_export_stl).grid(row=r, column=0, sticky="w"); r += 1
+
+        # ---------------- Vorschau
+        right = ttk.Frame(parent, padding=(0, 12, 12, 12))
+        right.grid(row=0, column=1, sticky="n")
+        nav = ttk.Frame(right)
+        nav.pack()
+        ttk.Button(nav, text="◀", width=3, command=lambda: self.turn_sign(-1)).pack(side="left")
+        self.sign_page_label = ttk.Label(nav, text="Schild 1/1", width=14, anchor="center")
+        self.sign_page_label.pack(side="left")
+        ttk.Button(nav, text="▶", width=3, command=lambda: self.turn_sign(1)).pack(side="left")
+
+        self.sign_canvas = tk.Canvas(right, width=self.SIGN_PREVIEW, height=self.SIGN_PREVIEW,
+                                     bg="white", highlightthickness=1, highlightbackground="#999")
+        self.sign_canvas.pack(pady=(6, 0))
+        self.sign_caption = ttk.Label(right, text="", foreground="#444")
+        self.sign_caption.pack(pady=(4, 0))
+
+    def sign_opts(self):
+        g = self.svars
+        return {
+            "prefix": g["s_prefix"].get().strip().upper(),
+            "nfrom":  g["s_from"].get(),
+            "nto":    g["s_to"].get(),
+            "pad":    max(1, parse_int(g["s_pad"].get(), 2)),
+            "fontmm": max(10.0, parse_float(g["s_fontmm"].get(), 160.0)),
+            "width":  max(40.0, parse_float(g["s_width"].get(), 300.0)),
+            "height": max(40.0, parse_float(g["s_height"].get(), 300.0)),
+            "thick":  max(1.0, parse_float(g["s_thick"].get(), 4.0)),
+            "depth":  max(0.0, parse_float(g["s_depth"].get(), 0.6)),
+            "radius": max(0.0, parse_float(g["s_radius"].get(), 20.0)),
+            "border": bool(g["s_border"].get()),
+            "holes":  bool(g["s_holes"].get()),
+        }
+
+    def refresh_signs(self):
+        o = self.sign_opts()
+        self.sign_texts = [o["prefix"] + str(n).zfill(o["pad"])
+                           for n in make_range(o["nfrom"], o["nto"])]
+        self.sign_index = max(0, min(self.sign_index, len(self.sign_texts) - 1))
+
+        depth = min(o["depth"], o["thick"] - SIGN_MIN_FLOOR)
+        lines = [f"{len(self.sign_texts)} Schild(er) à "
+                 f"{fmt(o['width'])} × {fmt(o['height'])} mm – je eine STL-Datei."]
+        if o["depth"] > depth:
+            lines.append(f"Hinweis: Vertiefung wird auf {fmt(depth)} mm begrenzt, "
+                         f"damit ein Restboden von {fmt(SIGN_MIN_FLOOR)} mm bleibt.")
+        elif 0 < o["depth"] < 0.2:
+            lines.append("⚠ Vertiefung unter 0,2 mm ist beim 3D-Druck praktisch "
+                         "unsichtbar (Schichthöhe). Empfehlung: 0,6 mm.")
+        self.sign_info.config(text="\n".join(lines))
+        self.draw_sign_preview()
+        self.save_settings()
+
+    def turn_sign(self, step):
+        self.sign_index = max(0, min(len(self.sign_texts) - 1, self.sign_index + step))
+        self.draw_sign_preview()
+
+    def draw_sign_preview(self):
+        c = self.sign_canvas
+        c.delete("all")
+        o = self.sign_opts()
+        total = max(1, len(self.sign_texts))
+        self.sign_page_label.config(text=f"Schild {self.sign_index + 1}/{total}")
+        if not self.sign_texts:
+            self.sign_caption.config(text="")
+            return
+        text = self.sign_texts[self.sign_index]
+
+        size = self.SIGN_PREVIEW
+        s = min((size - 30) / o["width"], (size - 30) / o["height"])
+        ox = (size - o["width"] * s) / 2
+        oy = (size - o["height"] * s) / 2
+        plate = "#ffcc00"   # Signalgelb, Schrift/Rahmen schwarz
+
+        def cx(x):
+            return ox + x * s
+
+        def cy(y):  # Platte zählt y nach oben, der Canvas nach unten
+            return oy + (o["height"] - y) * s
+
+        def poly_pts(poly):
+            pts = []
+            for x, y in poly:
+                pts += [cx(x), cy(y)]
+            return pts
+
+        c.create_polygon(poly_pts(rounded_rect(0.0, 0.0, o["width"], o["height"], o["radius"])),
+                         fill=plate, outline="#808080")
+        for hole in sign_hole_contours(o):
+            c.create_polygon(poly_pts(hole), fill="white", outline="#808080")
+        if win32gui is None:
+            c.create_text(size / 2, size / 2, fill="#888", justify="center",
+                          text="pywin32 fehlt – keine Vorschau möglich.\n"
+                               "Bitte einmal ausführen:  pip install pywin32")
+            self.sign_caption.config(text="")
+            return
+
+        contours = sign_engrave_contours(text, o)
+        for d, poly in sorted(zip(contour_depths(contours), contours),
+                              key=lambda pair: pair[0]):
+            c.create_polygon(poly_pts(poly), fill="black" if d % 2 == 0 else plate, outline="")
+
+        depth = min(o["depth"], o["thick"] - SIGN_MIN_FLOOR)
+        extra = f" · 2 Löcher Ø {fmt(SIGN_HOLE_D)} mm" if o["holes"] else ""
+        self.sign_caption.config(
+            text=f"Regalschild_{text}.stl · {fmt(o['width'])} × {fmt(o['height'])} × "
+                 f"{fmt(o['thick'])} mm · Zahl {fmt(depth)} mm vertieft{extra}")
+
+    def do_export_stl(self):
+        if win32gui is None:
+            messagebox.showerror(APP_TITLE, "pywin32 ist nicht installiert –\n"
+                                            "bitte einmal ausführen:  pip install pywin32")
+            return
+        if m3d is None:
+            messagebox.showerror(APP_TITLE, "manifold3d ist nicht installiert –\n"
+                                            "bitte einmal ausführen:  pip install manifold3d numpy")
+            return
+        o = self.sign_opts()
+        texts = list(self.sign_texts)
+        if not texts:
+            messagebox.showerror(APP_TITLE, "Keine Schilder – bitte den Zahlenbereich prüfen.")
+            return
+
+        def filename(text):
+            clean = re.sub(r"[^A-Za-z0-9_-]+", "", text) or "Schild"
+            return f"Regalschild_{clean}.stl"
+
+        if len(texts) == 1:
+            path = filedialog.asksaveasfilename(
+                title="STL-Datei speichern", defaultextension=".stl",
+                filetypes=[("STL-Datei", "*.stl")], initialfile=filename(texts[0]))
+            if not path:
+                return
+            targets = [(texts[0], path)]
+        else:
+            folder = filedialog.askdirectory(
+                title=f"Ordner für {len(texts)} STL-Dateien wählen")
+            if not folder:
+                return
+            targets = [(t, os.path.join(folder, filename(t))) for t in texts]
+
+        self.config(cursor="watch")
+        self.update_idletasks()
+        try:
+            for text, path in targets:
+                write_binary_stl(path, build_sign_mesh(text, o))
+        except Exception as exc:
+            messagebox.showerror(APP_TITLE, f"STL konnte nicht erstellt werden:\n{exc}")
+            return
+        finally:
+            self.config(cursor="")
+
+        depth = min(o["depth"], o["thick"] - SIGN_MIN_FLOOR)
+        where = targets[0][1] if len(targets) == 1 else os.path.dirname(targets[0][1])
+        messagebox.showinfo(
+            APP_TITLE,
+            f"{len(targets)} STL-Datei(en) erstellt:\n{where}\n\n"
+            "Zum Drucken einfach im Slicer (z. B. OrcaSlicer) öffnen.\n"
+            f"Tipp: Filament-Farbwechsel bei {fmt(o['thick'] - depth)} mm Höhe – "
+            "dann bekommt die Deckfläche eine andere Farbe und die vertiefte "
+            "Zahl bleibt in der Grundfarbe stehen.")
 
     # ---------------- Drucker
     @staticmethod
