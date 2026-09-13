@@ -1,0 +1,419 @@
+<title>Lager-Label</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+  :root {
+    --paper: #FAFAF7;
+    --ink: #1C1B17;
+    --steel: #5C5F63;
+    --line: #E4E2D9;
+    --card: #FFFFFF;
+    --yellow: #F2C200;
+    --yellow-ink: #1C1B17;
+    --label-paper: #FFFFFF;
+    --label-ink: #1C1B17;
+    --shadow: 0 2px 12px rgba(28, 27, 23, .08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #181816;
+      --ink: #ECEAE3;
+      --steel: #9B9C95;
+      --line: #33322E;
+      --card: #201F1C;
+      --shadow: 0 2px 12px rgba(0, 0, 0, .35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #181816;
+    --ink: #ECEAE3;
+    --steel: #9B9C95;
+    --line: #33322E;
+    --card: #201F1C;
+    --shadow: 0 2px 12px rgba(0, 0, 0, .35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: Barlow, "Segoe UI", system-ui, sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+    padding-inline: 20px;
+    padding-block: 0;
+  }
+  .wrap { max-width: 1060px; margin-inline: auto; }
+
+  h1, h2, h3 {
+    font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+    line-height: 1.08;
+    text-wrap: balance;
+    margin: 0;
+  }
+  p { margin: 0; }
+  a { color: inherit; }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .78rem;
+    font-weight: 600;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--steel);
+  }
+
+  /* ---------- Header ---------- */
+  header {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding-block: 20px;
+    border-bottom: 1px solid var(--line);
+  }
+  .wordmark {
+    display: flex; align-items: center; gap: 10px;
+    font-family: "Barlow Condensed", sans-serif;
+    font-weight: 700; font-size: 1.35rem; letter-spacing: .02em;
+    text-decoration: none;
+  }
+  .wordmark .chip {
+    background: var(--yellow); color: var(--yellow-ink);
+    font-family: "IBM Plex Mono", monospace; font-size: .8rem; font-weight: 600;
+    padding: 3px 7px; border: 2px solid var(--yellow-ink); border-radius: 3px;
+  }
+  nav { display: flex; gap: 22px; flex-wrap: wrap; }
+  nav a {
+    text-decoration: none; font-weight: 500; font-size: .95rem; color: var(--steel);
+  }
+  nav a:hover { color: var(--ink); }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center;
+    padding-block: 64px 56px;
+  }
+  .hero h1 { font-size: clamp(2.4rem, 5.5vw, 3.6rem); font-weight: 700; }
+  .hero .sub { margin-top: 18px; color: var(--steel); max-width: 46ch; }
+  .cta-row { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 28px; }
+  .btn {
+    display: inline-block; text-decoration: none; font-weight: 600; font-size: 1rem;
+    padding: 12px 22px; border-radius: 4px; border: 2px solid var(--ink);
+  }
+  .btn-primary { background: var(--yellow); color: var(--yellow-ink); border-color: var(--yellow-ink); }
+  .btn-primary:hover { filter: brightness(1.05); }
+  .btn-ghost { color: var(--ink); background: transparent; }
+  .btn-ghost:hover { background: var(--line); }
+  .hero-note {
+    margin-top: 16px; font-size: .88rem; color: var(--steel);
+  }
+
+  /* The Avery label, true 192:61 proportions */
+  .label-stack { display: flex; flex-direction: column; gap: 14px; max-width: 100%; }
+  .avery-label {
+    background: var(--label-paper); color: var(--label-ink);
+    aspect-ratio: 192 / 61; max-width: 100%; width: 100%;
+    border: 2px solid var(--label-ink); border-radius: 4px;
+    box-shadow: var(--shadow);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 4% 6%;
+  }
+  .avery-label .code {
+    font-family: "IBM Plex Mono", monospace; font-weight: 600;
+    font-size: clamp(1.6rem, 5.2vw, 2.6rem); letter-spacing: .18em; line-height: 1.1;
+  }
+  .avery-label svg { width: 46%; height: auto; margin-top: 2%; }
+  .label-caption {
+    display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    font-family: "IBM Plex Mono", monospace; font-size: .75rem; color: var(--steel);
+  }
+
+  /* ---------- Sections ---------- */
+  section { padding-block: 56px; border-top: 1px solid var(--line); }
+  .section-head { max-width: 62ch; margin-bottom: 36px; }
+  .section-head h2 { font-size: clamp(1.7rem, 3.5vw, 2.3rem); font-weight: 700; margin-top: 8px; }
+  .section-head p { margin-top: 12px; color: var(--steel); }
+
+  .feature-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+  }
+  .feature {
+    background: var(--card); border: 1px solid var(--line); border-radius: 6px;
+    padding: 22px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .feature h3 { font-size: 1.25rem; font-weight: 600; }
+  .feature p { font-size: .95rem; color: var(--steel); }
+  .feature .tag {
+    font-family: "IBM Plex Mono", monospace; font-size: .72rem; font-weight: 600;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--steel);
+  }
+
+  /* ---------- Regalschilder ---------- */
+  .sign-section { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
+  .shelf-sign {
+    background: var(--yellow); color: var(--yellow-ink);
+    aspect-ratio: 1 / 1; max-width: 340px; width: 100%; margin-inline: auto;
+    border-radius: 24px; border: 3px solid var(--yellow-ink);
+    box-shadow: var(--shadow);
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .shelf-sign .num {
+    font-family: "Barlow Condensed", sans-serif; font-weight: 700;
+    font-size: clamp(4rem, 12vw, 7rem); letter-spacing: .04em;
+    text-shadow: 1px 1px 0 rgba(255,255,255,.4);
+  }
+  .shelf-sign .hole {
+    position: absolute; top: 22px; width: 18px; height: 18px; border-radius: 50%;
+    background: var(--paper); border: 2px solid var(--yellow-ink);
+  }
+  .shelf-sign .hole.l { left: 22px; }
+  .shelf-sign .hole.r { right: 22px; }
+  .sign-caption {
+    text-align: center; margin-top: 12px;
+    font-family: "IBM Plex Mono", monospace; font-size: .75rem; color: var(--steel);
+  }
+  .spec-list { display: flex; flex-direction: column; gap: 14px; margin-top: 24px; }
+  .spec {
+    display: grid; grid-template-columns: 120px 1fr; gap: 14px; align-items: baseline;
+    border-bottom: 1px solid var(--line); padding-bottom: 12px;
+  }
+  .spec dt {
+    font-family: "IBM Plex Mono", monospace; font-size: .8rem; font-weight: 600;
+    color: var(--steel); margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .spec dd { margin: 0; font-size: .95rem; }
+
+  /* ---------- Workflow ---------- */
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; counter-reset: step; }
+  .step {
+    counter-increment: step;
+    display: flex; flex-direction: column; gap: 10px;
+    border-top: 3px solid var(--yellow); padding-top: 14px;
+  }
+  .step::before {
+    content: counter(step, decimal-leading-zero);
+    font-family: "IBM Plex Mono", monospace; font-weight: 600; font-size: .85rem;
+    color: var(--steel);
+  }
+  .step h3 { font-size: 1.15rem; font-weight: 600; }
+  .step p { font-size: .92rem; color: var(--steel); }
+
+  /* ---------- Download ---------- */
+  .download {
+    background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+    padding: 40px; text-align: center;
+  }
+  .download h2 { font-size: clamp(1.7rem, 3.5vw, 2.2rem); font-weight: 700; }
+  .download p { margin-top: 12px; color: var(--steel); max-width: 52ch; margin-inline: auto; }
+  .download .cta-row { justify-content: center; }
+
+  footer {
+    border-top: 1px solid var(--line); margin-top: 56px; padding-block: 28px 40px;
+    display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    font-size: .88rem; color: var(--steel);
+  }
+  footer a { color: var(--steel); }
+
+  @media (max-width: 760px) {
+    .hero, .sign-section { grid-template-columns: 1fr; gap: 32px; }
+    .feature-grid { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr 1fr; }
+    .download { padding: 28px 20px; }
+  }
+  @media (max-width: 440px) {
+    .steps { grid-template-columns: 1fr; }
+    nav { display: none; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .btn { transition: filter .15s ease, background .15s ease; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <a class="wordmark" href="#"><span class="chip">K 14 09</span> Lager-Label</a>
+    <nav>
+      <a href="#etiketten">Etiketten</a>
+      <a href="#regalschilder">Regalschilder</a>
+      <a href="#ablauf">Ablauf</a>
+      <a href="#download">Download</a>
+      <a href="https://github.com/GlnSevi/Lager-Label">GitHub</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <div>
+      <p class="eyebrow">Regal-Beschriftung für Ihr Lager</p>
+      <h1>Vom Lagerort zum fertigen Etikett – in einer Minute.</h1>
+      <p class="sub">
+        Lager-Label druckt Lagerort-Etiketten im Stil Ihrer bestehenden
+        Regal-Beschriftung auf <strong>Avery Zweckform L4761-100</strong>
+        (4&nbsp;Etiketten je 192&nbsp;×&nbsp;61&nbsp;mm pro A4-Bogen) – ganze Serien auf einen
+        Schlag, mit Barcode. Und erstellt große Regalschilder als STL-Datei
+        für den 3D-Drucker gleich mit.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://github.com/GlnSevi/Lager-Label/releases">EXE herunterladen</a>
+        <a class="btn btn-ghost" href="#etiketten">Funktionen ansehen</a>
+      </div>
+      <p class="hero-note">Windows · keine Installation nötig · alle Einstellungen werden gemerkt</p>
+    </div>
+    <div class="label-stack">
+      <div class="avery-label">
+        <span class="code">K 14 09</span>
+        <svg viewBox="0 0 200 34" role="img" aria-label="Barcode Code 128 für K1409">
+          <g fill="currentColor">
+            <rect x="0"   y="0" width="4" height="26"/><rect x="6"   y="0" width="2" height="26"/>
+            <rect x="12"  y="0" width="6" height="26"/><rect x="20"  y="0" width="2" height="26"/>
+            <rect x="26"  y="0" width="4" height="26"/><rect x="34"  y="0" width="2" height="26"/>
+            <rect x="38"  y="0" width="6" height="26"/><rect x="48"  y="0" width="4" height="26"/>
+            <rect x="54"  y="0" width="2" height="26"/><rect x="60"  y="0" width="6" height="26"/>
+            <rect x="70"  y="0" width="2" height="26"/><rect x="76"  y="0" width="4" height="26"/>
+            <rect x="82"  y="0" width="2" height="26"/><rect x="88"  y="0" width="6" height="26"/>
+            <rect x="98"  y="0" width="2" height="26"/><rect x="102" y="0" width="4" height="26"/>
+            <rect x="110" y="0" width="6" height="26"/><rect x="118" y="0" width="2" height="26"/>
+            <rect x="124" y="0" width="4" height="26"/><rect x="132" y="0" width="6" height="26"/>
+            <rect x="140" y="0" width="2" height="26"/><rect x="146" y="0" width="4" height="26"/>
+            <rect x="154" y="0" width="2" height="26"/><rect x="158" y="0" width="6" height="26"/>
+            <rect x="168" y="0" width="2" height="26"/><rect x="174" y="0" width="4" height="26"/>
+            <rect x="182" y="0" width="2" height="26"/><rect x="188" y="0" width="6" height="26"/>
+            <text x="100" y="33" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="8" stroke="none">K1409</text>
+          </g>
+        </svg>
+      </div>
+      <div class="label-caption">
+        <span>AVERY ZWECKFORM L4761</span>
+        <span>192 × 61 MM</span>
+        <span>CODE 128</span>
+      </div>
+    </div>
+  </div>
+
+  <section id="etiketten">
+    <div class="section-head">
+      <p class="eyebrow">Reiter „Etiketten (Papier)“</p>
+      <h2>Ganze Serien oder Freitext – die Vorschau zeigt jeden Bogen exakt.</h2>
+      <p>
+        Oben umschaltbar zwischen <strong>Serie</strong> (Buchstabe + Zahlen)
+        und <strong>Freitext</strong>. Rechts sehen Sie jeden Bogen genau so,
+        wie er aus dem Drucker kommt.
+      </p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature">
+        <span class="tag">Serie</span>
+        <h3>Buchstaben + Zahlenbereiche</h3>
+        <p>Z. B. <code>K,A</code> mit Feld 1–20 und Ebene 9. Reihenfolge wählbar:
+        Buchstaben zusammen (<code>K 01, A 01, K 02 …</code>) oder nacheinander.
+        Führende Nullen einstellbar.</p>
+      </div>
+      <div class="feature">
+        <span class="tag">Freitext</span>
+        <h3>Je Zeile ein Etikett</h3>
+        <p>Beliebige Texte, mittig gesetzt – zu lange Texte werden automatisch
+        verkleinert. Anzahl je Text von 1–999, abweichend je Zeile mit
+        <code>Reserviert Werkstatt | 8</code>.</p>
+      </div>
+      <div class="feature">
+        <span class="tag">Barcode</span>
+        <h3>Code 128 unter dem Text</h3>
+        <p>Barcode der Nummer ohne Leerzeichen (z. B. <code>K1409</code>) –
+        wahlweise nur bei bestimmten Buchstaben. Auch im Freitext-Modus möglich.</p>
+      </div>
+      <div class="feature">
+        <span class="tag">Passgenauigkeit</span>
+        <h3>Testbogen &amp; Feinjustierung</h3>
+        <p>Erst Testbogen mit Schnittrahmen auf Normalpapier drucken, gegen einen
+        Etikettenbogen halten, dann X/Y in Millimetern nachjustieren.</p>
+      </div>
+      <div class="feature">
+        <span class="tag">Druck</span>
+        <h3>Drucker &amp; Papierfach direkt wählen</h3>
+        <p>Druckereinstellungen (z. B. Papierfach) werden geöffnet, gemerkt und
+        beim Druck verwendet. Umrandung als Rahmen zuschaltbar.</p>
+      </div>
+      <div class="feature">
+        <span class="tag">Sparsam</span>
+        <h3>Angebrochene Bögen weiterverwenden</h3>
+        <p>Start-Position auf dem Bogen frei wählbar (Etikett 1–4) – kein
+        Etikett geht verloren.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="regalschilder">
+    <div class="sign-section">
+      <div>
+        <p class="eyebrow">Reiter „Regalschilder (3D-Druck)“</p>
+        <h2 style="font-size: clamp(1.7rem, 3.5vw, 2.3rem); font-weight: 700; margin-top: 8px;">
+          Große Schilder für die Regalseite – als STL für den 3D-Drucker.
+        </h2>
+        <dl class="spec-list">
+          <div class="spec"><dt>300 × 300 mm</dt><dd>Standard-Plattengröße; Größe, Dicke und Schrifthöhe frei einstellbar.</dd></div>
+          <div class="spec"><dt>0,6 mm</dt><dd>Die Zahl wird vertieft eingelassen – ausmalen mit Lackstift oder Filamentwechsel auf der angezeigten Höhe.</dd></div>
+          <div class="spec"><dt>R 20 mm</dt><dd>Abgerundete Ecken mit frei wählbarem Radius (0 = eckig), Rahmen im Stil der Papier-Etiketten einfräsbar.</dd></div>
+          <div class="spec"><dt>2 × Ø 6 mm</dt><dd>Lochung in den oberen Ecken zum Anschrauben oder Aufhängen – abschaltbar.</dd></div>
+          <div class="spec"><dt>K01 … K20</dt><dd>Je Zahl ein Schild; bei mehreren wird jede STL einzeln abgelegt (<code>Regalschild_K01.stl</code> …). Einfach im Slicer öffnen, z. B. OrcaSlicer.</dd></div>
+        </dl>
+      </div>
+      <div>
+        <div class="shelf-sign">
+          <span class="hole l"></span><span class="hole r"></span>
+          <span class="num">K14</span>
+        </div>
+        <p class="sign-caption">VORSCHAU · GELB MIT SCHWARZER SCHRIFT · WIE DAS FERTIGE SCHILD</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="ablauf">
+    <div class="section-head">
+      <p class="eyebrow">So kommen die Etiketten ins Regal</p>
+      <h2>Vier Schritte bis zum beschrifteten Lager.</h2>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <h3>Programm starten</h3>
+        <p><code>Lager-Etiketten.exe</code> ausführen – keine Installation nötig.
+        Auf Wunsch an die Taskleiste anheften.</p>
+      </div>
+      <div class="step">
+        <h3>Serie eingeben</h3>
+        <p>Buchstabe(n), Zahlenbereiche und Optionen setzen – die Vorschau
+        rechts zeigt sofort jeden Bogen.</p>
+      </div>
+      <div class="step">
+        <h3>Testbogen drucken</h3>
+        <p>Erste Seite mit Schnittrahmen auf Normalpapier, gegen einen
+        Etikettenbogen halten, bei Versatz fein justieren.</p>
+      </div>
+      <div class="step">
+        <h3>Etiketten drucken</h3>
+        <p>Etikettenbögen einlegen, Drucker und Papierfach wählen,
+        🖨 Drucken – fertig. Alle Eingaben bleiben gespeichert.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="download">
+      <p class="eyebrow">Kostenlos für Windows</p>
+      <h2>Lager-Label herunterladen</h2>
+      <p>
+        Die fertige <code>Lager-Etiketten.exe</code> liegt beim jeweils neuesten
+        Release – herunterladen, starten, drucken. Alle Eingaben und
+        Einstellungen werden automatisch gespeichert und beim nächsten Start
+        wiederhergestellt.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://github.com/GlnSevi/Lager-Label/releases">Neuestes Release</a>
+        <a class="btn btn-ghost" href="https://github.com/GlnSevi/Lager-Label">Quellcode auf GitHub</a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>Lager-Label · Regal-Etiketten &amp; Regalschilder</span>
+    <a href="https://github.com/GlnSevi/Lager-Label">github.com/GlnSevi/Lager-Label</a>
+  </footer>
+</div>
