@@ -12,7 +12,7 @@ from PIL import ImageChops
 
 from free_labels import (ExcelRow, FORMATS, FORMATS_BY_CODE, LabelFormat, MAX_ROWS,
                          cell_text, excel_items, fitted_text, paginate, read_excel,
-                         render_sheet, RENDER_DPI)
+                         render_sheet, RENDER_DPI, CURATED, search_formats)
 
 
 class ExcelTests(unittest.TestCase):
@@ -178,6 +178,43 @@ class LayoutTests(unittest.TestCase):
         a, b = ImageChops.invert(original).getbbox(), ImageChops.invert(shifted).getbbox()
         self.assertLessEqual(abs(b[0] - a[0] - 2 * scale), 1)
         self.assertLessEqual(abs(b[1] - a[1] - 3 * scale), 1)
+
+
+class CatalogTests(unittest.TestCase):
+    def test_catalog_is_loaded_unique_and_curated_first(self):
+        self.assertGreater(len(FORMATS), 500)
+        self.assertEqual(FORMATS[:len(CURATED)], CURATED)
+        self.assertEqual(len(FORMATS_BY_CODE), len(FORMATS))
+        for code in ("3477", "3475", "3490", "4780", "3666", "3662", "L7651", "L7160"):
+            self.assertIn(code, FORMATS_BY_CODE)
+        self.assertTrue(FORMATS_BY_CODE["3662"].landscape)
+        self.assertEqual(FORMATS_BY_CODE["4790"].shape, "round")
+        f3477 = FORMATS_BY_CODE["3477"]
+        self.assertEqual((f3477.width, f3477.height, f3477.per_sheet), (105, 41, 14))
+
+    def test_search_matches_code_name_and_size(self):
+        self.assertEqual(search_formats("3477")[0].code, "3477")
+        self.assertTrue(all("ordner" in f.description.lower() for f in search_formats("Ordner")))
+        self.assertIn("3475", [f.code for f in search_formats("70 × 36")])
+        self.assertIn("L7160", [f.code for f in search_formats("63,5 38,1")])
+        self.assertEqual(search_formats("gibtesnicht"), [])
+
+    def test_landscape_round_and_rotated_rendering(self):
+        scale = RENDER_DPI / 25.4
+        spine = FORMATS_BY_CODE["3662"]
+        self.assertGreater(render_sheet(["Ordner 2026"], spine).width,
+                           render_sheet(["Ordner 2026"], spine).height)
+        rotated = render_sheet(["Ordner 2026"], spine, rotate=True)
+        left, top, width, height = spine.rect(0)
+        box = rotated.crop((round(left * scale), round(top * scale),
+                            round((left + width) * scale), round((top + height) * scale)))
+        ink = ImageChops.invert(box).getbbox()
+        self.assertGreater(ink[3] - ink[1], ink[2] - ink[0])  # text runs along the long side
+        disc = FORMATS_BY_CODE["4790"]
+        image = render_sheet(["Rund"], disc, border=True)
+        x, y, _, _ = disc.rect(0)
+        corner = image.getpixel((round((x + .3) * scale), round((y + .3) * scale)))
+        self.assertEqual(corner, (255, 255, 255))  # nothing printed outside the circle
 
 
 @unittest.skipUnless(os.name == "nt", "Windows GUI integration")

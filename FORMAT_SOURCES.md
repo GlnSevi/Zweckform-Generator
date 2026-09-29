@@ -27,6 +27,27 @@ Alte Katalogangaben mit abweichenden/gerundeten Maßen werden nicht ungeprüft
 übernommen (z. B. 64 mm bei L7159 oder Letter-Seitenmaße bei L7169).
 L4761 behält das Raster der bestehenden App.
 
+## Vollständiger Katalog (`zweckform_formats.json`)
+
+Zusätzlich zu den 13 oben geprüften Vorlagen enthält die App alle weiteren
+A4-Bögen aus
+- dem LibreOffice-Katalog (Hersteller „Avery Zweckform“, „Avery A4“,
+  „Avery A4/Asia“) und
+- den [gLabels-Vorlagen](https://github.com/j-evins/glabels-qt/blob/master/templates/avery-iso-templates.xml)
+  (Avery A4, inkl. runder/CD-Etiketten).
+
+Die Datei wird mit `python tools/build_formats.py` aus den Kopien in
+`tools/sources/` erzeugt. Übernommen werden A4-Hoch- und Querformat;
+Endlos-, Letter- und A5-Formate entfallen, ebenso Bögen mit gemischten
+Etikettengrößen und die wenigen Katalogeinträge, deren Raster nicht auf A4
+passt (das Skript listet sie auf). Bei doppelter Artikelnummer gewinnt die
+deutsche Zweckform-Angabe; die 13 geprüften Vorlagen haben immer Vorrang.
+Varianten mit gleicher Nummer, aber anderem Raster erhalten eine Endung
+(z. B. `C2050-2`).
+
+Die Katalogmaße stammen nicht direkt vom Hersteller. Vor größeren
+Druckaufträgen daher immer zuerst den **Testbogen** verwenden.
+
 Die voreingestellten Maße sind im Reiter sichtbar. Bei abweichendem Bogen:
 Vorlage auswählen, danach „Eigenes Format“ wählen und Maße korrigieren.
 Ein Testbogen auf Normalpapier dient zur Kontrolle am tatsächlich verwendeten

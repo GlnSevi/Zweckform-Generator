@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Lager-Etiketten Generator – Avery Zweckform L4761-100
+Zweckform Generator (vormals Lager-Etiketten) – Avery Zweckform L4761-100 und alle A4-Zweckform-Bögen
 A4-Bogen, 4 Etiketten je 192 x 61 mm.
 
 GUI (tkinter) mit Vorschau und Direktdruck über Windows GDI (pywin32),
@@ -40,7 +40,7 @@ except ImportError:
     m3d = np = None
 
 APP_ID = "Kunzer.LagerLabel.Etiketten"
-APP_TITLE = "Lager-Etiketten & Regalschilder – Kunzer"
+APP_TITLE = "Zweckform Generator – Kunzer"
 SETTINGS_FILE = os.path.join(os.environ.get("APPDATA", "."), "LagerLabel", "settings.json")
 
 # ---------------------------------------------------------------- Bogen-Maße (mm)
@@ -391,7 +391,7 @@ def write_binary_stl(path, tris):
         return nx / length, ny / length, nz / length
 
     with open(path, "wb") as f:
-        f.write(b"Kunzer Regalschild (Lager-Etiketten App)".ljust(80, b" "))
+        f.write(b"Kunzer Regalschild (Zweckform Generator)".ljust(80, b" "))
         f.write(struct.pack("<I", 0))          # Platzhalter, wird unten korrigiert
         count = 0
         for a, b, c in tris:
@@ -481,7 +481,7 @@ def print_sheets(printer_name, sheets, opts, devmode=None):
                                px(bc_x + (start + width) * BC_MODULE),
                                py(y0 + BC_HEIGHT)), 0)
 
-    hdc.StartDoc("Lager-Etiketten")
+    hdc.StartDoc("Zweckform Generator")
     try:
         for page in sheets:
             hdc.StartPage()

@@ -9,8 +9,10 @@ from tkinter import filedialog, messagebox, ttk
 
 from PIL import Image, ImageTk
 
-from free_labels import (FORMATS, FORMATS_BY_CODE, LabelFormat, excel_items,
-                         paginate, print_excel_sheets, read_excel, render_sheet)
+from free_labels import (FORMATS, FORMATS_BY_CODE, LabelFormat, excel_items, paginate,
+                         print_excel_sheets, read_excel, render_sheet, search_formats)
+
+CUSTOM = "Eigenes Format"
 
 
 class FreeLabelTab(ttk.Frame):
@@ -29,14 +31,17 @@ class FreeLabelTab(ttk.Frame):
                     "columns": "3", "rows": "7", "left": "7,21", "top": "15,15",
                     "gap_x": "2,54", "gap_y": "0", "font_mm": "7",
                     "off_x": "0", "off_y": "0", "start": "1",
-                    "skip_header": False, "keep_blanks": True, "border": False}
+                    "skip_header": False, "keep_blanks": True, "border": False,
+                    "rotate": False, "landscape": False, "round": False}
         saved = saved if isinstance(saved, dict) else {}
         self.vars = {k: (tk.BooleanVar(self, value=saved.get(k, v)) if isinstance(v, bool)
                          else tk.StringVar(self, value=saved.get(k, v))) for k, v in defaults.items()}
-        if self.vars["format"].get() not in (*FORMATS_BY_CODE, "Eigenes Format"):
+        if self.vars["format"].get() not in (*FORMATS_BY_CODE, CUSTOM):
             self.vars["format"].set("L7160")
         self.sheet_name = tk.StringVar(self)
         self.format_name = tk.StringVar(self)
+        self.format_query = tk.StringVar(self)
+        self.shown_formats = list(FORMATS)
         self.build_ui()
         self.select_format(initial=True)
         for key, var in self.vars.items():
@@ -68,11 +73,24 @@ class FreeLabelTab(ttk.Frame):
         ttk.Checkbutton(controls, text="Leere Zeilen als freie Etiketten beibehalten",
                         variable=self.vars["keep_blanks"]).pack(anchor="w")
 
-        ttk.Label(controls, text="Avery Zweckform / Bogenformat:").pack(anchor="w", pady=(10, 2))
+        ttk.Label(controls, text=f"Avery Zweckform / Bogenformat ({len(FORMATS)} Vorlagen):").pack(
+            anchor="w", pady=(10, 2))
+        line = ttk.Frame(controls)
+        line.pack(anchor="w", fill="x")
+        ttk.Label(line, text="Suche:").pack(side="left", padx=(0, 5))
+        search = ttk.Entry(line, textvariable=self.format_query, width=24)
+        search.pack(side="left")
+        search.bind("<Return>", lambda _e: self.format_box.event_generate("<Down>"))
+        self.match_label = ttk.Label(line, text="", foreground="#666")
+        self.match_label.pack(side="left", padx=(8, 0))
+        ttk.Label(controls, text="z. B. 3477, L7160, Ordner, rund, 70 × 36",
+                  foreground="#777").pack(anchor="w")
         self.format_box = ttk.Combobox(controls, state="readonly", textvariable=self.format_name,
-            values=[f.description for f in FORMATS] + ["Eigenes Format"], width=49)
-        self.format_box.pack(anchor="w")
+                                       width=62, height=25)
+        self.format_box.pack(anchor="w", pady=(2, 0))
         self.format_box.bind("<<ComboboxSelected>>", self.select_format)
+        self.format_query.trace_add("write", self.filter_formats)
+        self.filter_formats()
         self.geometry_frame = ttk.Frame(controls)
         self.geometry_frame.pack(anchor="w", pady=(5, 2))
         self.geometry_entries = []
@@ -85,6 +103,11 @@ class FreeLabelTab(ttk.Frame):
                 entry = ttk.Entry(self.geometry_frame, textvariable=self.vars[key], width=7)
                 entry.grid(row=row, column=col * 2 + 1, padx=(0, 10), pady=1)
                 self.geometry_entries.append(entry)
+        self.custom_checks = [
+            ttk.Checkbutton(self.geometry_frame, text="A4 quer", variable=self.vars["landscape"]),
+            ttk.Checkbutton(self.geometry_frame, text="runde Etiketten", variable=self.vars["round"])]
+        for col, check in enumerate(self.custom_checks):
+            check.grid(row=4, column=col * 2, columnspan=2, sticky="w")
 
         line = ttk.Frame(controls)
         line.pack(anchor="w", pady=(8, 4))
@@ -100,6 +123,8 @@ class FreeLabelTab(ttk.Frame):
             ttk.Label(line, text=title).pack(side="left", padx=(8, 4))
             ttk.Entry(line, textvariable=self.vars[key], width=6).pack(side="left")
         ttk.Checkbutton(controls, text="Umrandung drucken", variable=self.vars["border"]).pack(anchor="w")
+        ttk.Checkbutton(controls, text="Text um 90° drehen (z. B. Ordnerrücken)",
+                        variable=self.vars["rotate"]).pack(anchor="w")
         ttk.Label(controls, text="Drucker:").pack(anchor="w", pady=(8, 2))
         ttk.Combobox(controls, state="readonly", textvariable=self.app.vars["printer"],
                      values=self.app.printer_list(), width=49).pack(anchor="w")
@@ -131,17 +156,28 @@ class FreeLabelTab(ttk.Frame):
                                 bg="white", highlightthickness=1, highlightbackground="#999")
         self.canvas.pack(pady=(6, 0))
 
+    def filter_formats(self, *_args):
+        query = self.format_query.get().strip()
+        self.shown_formats = search_formats(query) if query else list(FORMATS)
+        self.format_box.configure(values=[f.description for f in self.shown_formats] + [CUSTOM])
+        self.match_label.configure(text=f"{len(self.shown_formats)} Treffer" if query else "")
+
     def select_format(self, _event=None, initial=False):
         if not initial:
             index = self.format_box.current()
-            self.vars["format"].set(FORMATS[index].code if index < len(FORMATS) else "Eigenes Format")
+            self.vars["format"].set(self.shown_formats[index].code
+                                    if 0 <= index < len(self.shown_formats) else CUSTOM)
         layout = FORMATS_BY_CODE.get(self.vars["format"].get())
-        self.format_name.set(layout.description if layout else "Eigenes Format")
+        self.format_name.set(layout.description if layout else CUSTOM)
         if layout:
-            for key in ("width", "height", "columns", "rows", "left", "top", "gap_x", "gap_y"):
+            for key in LabelFormat.GEOMETRY:
                 self.vars[key].set(f"{getattr(layout, key):g}".replace(".", ","))
+            self.vars["landscape"].set(layout.landscape)
+            self.vars["round"].set(layout.shape == "round")
         for entry in self.geometry_entries:
             entry.configure(state="readonly" if layout else "normal")
+        for check in self.custom_checks:
+            check.configure(state="disabled" if layout else "normal")
         if not initial:
             self.vars["start"].set("1")
             self.page_index = 0
@@ -214,13 +250,15 @@ class FreeLabelTab(ttk.Frame):
             ("columns", "Spalten", 1, 40, True), ("rows", "Reihen", 1, 59, True),
             ("left", "Rand links", 0, 210, False), ("top", "Rand oben", 0, 297, False),
             ("gap_x", "Abstand X", 0, 210, False), ("gap_y", "Abstand Y", 0, 297, False)]}
-        return LabelFormat("Eigenes Format", **values).validate()
+        return LabelFormat(CUSTOM, **values, landscape=self.vars["landscape"].get(),
+                           shape="round" if self.vars["round"].get() else "rect").validate()
 
     def render_options(self):
         return {"font_mm": self.number("font_mm", "Schriftgröße", 1, 100),
                 "off_x": self.number("off_x", "Versatz X", -30, 30),
                 "off_y": self.number("off_y", "Versatz Y", -30, 30),
-                "border": self.vars["border"].get()}
+                "border": self.vars["border"].get(),
+                "rotate": self.vars["rotate"].get()}
 
     def refresh(self):
         if self.pending is not None:
@@ -264,8 +302,9 @@ class FreeLabelTab(ttk.Frame):
         if not self.sheets:
             return
         image = render_sheet(self.sheets[self.page_index], self.layout, **(options or self.render_options()))
-        scale = self.app.SCALE
-        image = image.resize((round(210 * scale), round(297 * scale)), Image.Resampling.LANCZOS)
+        page_w, page_h = self.layout.page_size
+        scale = self.app.SCALE * min(210 / page_w, 297 / page_h)
+        image = image.resize((round(page_w * scale), round(page_h * scale)), Image.Resampling.LANCZOS)
         self.preview_image = ImageTk.PhotoImage(image, master=self)
         self.canvas.delete("all")
         self.canvas.create_image(0, 0, image=self.preview_image, anchor="nw")
@@ -273,11 +312,16 @@ class FreeLabelTab(ttk.Frame):
         for pos in range(self.layout.per_sheet):
             x, y, w, h = self.layout.rect(pos)
             x, y = x + options["off_x"], y + options["off_y"]
-            self.canvas.create_rectangle(x * scale, y * scale, (x + w) * scale, (y + h) * scale,
-                                         outline="#bbb", dash=(2, 3))
+            shape = self.canvas.create_oval if self.layout.shape == "round" else self.canvas.create_rectangle
+            shape(x * scale, y * scale, (x + w) * scale, (y + h) * scale, outline="#bbb", dash=(2, 3))
             if self.sheets[self.page_index][pos] is None:
                 self.canvas.create_text((x + 1) * scale, (y + 1) * scale,
                     text=str(pos + 1), fill="#aaa", anchor="nw", font=("Arial", 7))
+        if self.layout.landscape:
+            self.canvas.create_rectangle(0, 0, page_w * scale, page_h * scale, outline="#999")
+            self.canvas.create_text(4, page_h * scale + 6, anchor="nw", fill="#666",
+                text="A4 quer – der Bogen wird im Hochformat eingelegt,\n"
+                     "die obere Kante dieser Ansicht liegt beim Druck links.")
         self.page_label.configure(text=f"Seite {self.page_index + 1}/{len(self.sheets)}")
         self.prev_button.configure(state="normal" if self.page_index else "disabled")
         self.next_button.configure(state="normal" if self.page_index + 1 < len(self.sheets) else "disabled")

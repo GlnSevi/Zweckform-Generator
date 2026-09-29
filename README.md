@@ -1,4 +1,8 @@
-# Lager-Label – Regal-Etiketten & Regalschilder
+# Zweckform Generator
+
+Etiketten für **alle gängigen Avery-Zweckform-A4-Bögen** (rund 600 Vorlagen) –
+Texte direkt aus Excel (Spalte A) –, dazu Lagerort-Etiketten und Regalschilder.
+(Früherer Name: Lager-Label / Lager-Etiketten.)
 
 Druckt Lagerort-Etiketten auf **Avery Zweckform L4761-100** (A4, 4 Etiketten je
 192 × 61 mm pro Bogen) im Stil der bestehenden Regal-Beschriftung (z. B. `K 14 09`) –
@@ -6,8 +10,8 @@ und erstellt zusätzlich große **Regalschilder für den 3D-Drucker**.
 
 ## Programm starten
 
-**`Lager-Etiketten.exe`** starten – keine Installation nötig.
-(Download beim jeweils neuesten [Release](https://github.com/GlnSevi/Lager-Label/releases)
+**`Zweckform-Generator.exe`** starten – keine Installation nötig.
+(Download beim jeweils neuesten [Release](https://github.com/GlnSevi/Zweckform-Generator/releases)
 oder lokal unter `dist\`.)
 
 Zum Anheften an die Taskleiste: Programm starten, dann Rechtsklick auf das
@@ -77,8 +81,10 @@ Seite – als **STL-Datei** für den 3D-Drucker:
 
 1. **Excel-Datei öffnen…** und das gewünschte **Arbeitsblatt** wählen
    (`.xlsx`, `.xlsm` oder `.xls`; Excel muss nicht installiert sein).
-2. **Zweckform-Format** auswählen: L4761, L7159–L7169 oder 3666.
-   Maße und Anzahl pro Bogen stehen direkt in der Auswahl.
+2. **Zweckform-Format** auswählen – rund **600 A4-Vorlagen** von Avery Zweckform
+   sind hinterlegt. Über das Feld **Suche** filtern, z. B. nach Artikelnummer
+   (`3477`, `L7160`), Bezeichnung (`Ordner`, `rund`, `Regal`) oder Größe
+   (`70 × 36`, `63,5 38,1`). Maße und Anzahl pro Bogen stehen in der Auswahl.
 3. Die **Vorschau** kontrollieren, bei Bedarf zunächst einen **Testbogen**
    auf Normalpapier drucken und anschließend **Drucken** wählen.
 
@@ -104,7 +110,13 @@ werden ignoriert; die Datei wird nicht verändert.
   die Formeln durch Werte ersetzen. Makros werden nicht ausgeführt.
 - **Start bei Etikett** nutzt angebrochene Bögen weiter; **Schriftgröße**,
   **Umrandung** und **Feinjustierung X/Y** lassen sich unabhängig einstellen.
-- **Eigenes Format** erlaubt weitere rechteckige A4-Bögen: Breite/Höhe,
+- **Runde Etiketten** (CD, Ø-Etiketten) werden rund dargestellt; der Text wird
+  innerhalb des Kreises platziert, die Umrandung als Kreis gedruckt.
+- **A4-quer-Vorlagen** (z. B. Ordnerrücken 3662/3663) werden quer angezeigt
+  und beim Druck automatisch gedreht – der Bogen wird normal im Hochformat
+  eingelegt. Mit **Text um 90° drehen** läuft der Text entlang der langen
+  Seite (z. B. für Ordnerrücken).
+- **Eigenes Format** erlaubt weitere A4-Bögen (auch quer oder rund): Breite/Höhe,
   Spalten/Reihen, Ränder und Abstände in mm. Die zuvor ausgewählte Vorlage
   dient als Ausgangspunkt. Ungültige Raster werden vor dem Druck gemeldet.
 - Der Druck erfolgt in **A4-Hochformat, in Originalgröße**. Vorschau und
@@ -126,7 +138,7 @@ Auftrag erneut geöffnet.
 ```powershell
 pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
-python -m PyInstaller --noconfirm Lager-Etiketten.spec
+python -m PyInstaller --noconfirm Zweckform-Generator.spec
 ```
 
-Die fertige EXE liegt danach unter `dist\Lager-Etiketten.exe`.
+Die fertige EXE liegt danach unter `dist\Zweckform-Generator.exe`.
