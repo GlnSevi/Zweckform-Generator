@@ -23,6 +23,8 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from tkinter import font as tkfont
 
+from free_label_tab import FreeLabelTab
+
 try:
     import win32con
     import win32gui
@@ -556,6 +558,7 @@ class App(tk.Tk):
         self.sign_index = 0
         self.sign_texts = []
         self.freitext_saved = ""
+        self.free_settings = {}
 
         self.vars = {
             "mode":     tk.StringVar(value="serie"),
@@ -615,6 +618,7 @@ class App(tk.Tk):
                 data = json.load(f)
             self.tray_fields = data.get("trays", {})
             self.freitext_saved = str(data.get("freitext", ""))
+            self.free_settings = data.get("free_labels", {})
             for k, v in data.items():
                 if k in self.vars:
                     self.vars[k].set(v)
@@ -630,6 +634,8 @@ class App(tk.Tk):
             for k, v in self.svars.items():
                 data[k] = bool(v.get()) if isinstance(v, tk.BooleanVar) else v.get()
             data["trays"] = self.tray_fields
+            data["free_labels"] = (self.free_tab.settings() if hasattr(self, "free_tab")
+                                   else self.free_settings)
             with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception:
@@ -645,6 +651,8 @@ class App(tk.Tk):
         self.notebook.add(tab_signs, text="  Regalschilder (3D-Druck)  ")
         self.build_label_tab(tab_labels)
         self.build_sign_tab(tab_signs)
+        self.free_tab = FreeLabelTab(self.notebook, self, self.free_settings)
+        self.notebook.add(self.free_tab, text="  Frei / Excel  ")
 
     # ---------------- Reiter 1: Etiketten (Papier)
     def build_label_tab(self, parent):

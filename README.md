@@ -73,14 +73,60 @@ Seite – als **STL-Datei** für den 3D-Drucker:
   fertigen Druck nicht sichtbar – das Programm warnt in dem Fall
 - Die STL-Datei einfach im Slicer öffnen (z. B. **OrcaSlicer**) und drucken
 
-Alle Eingaben und Einstellungen werden automatisch gespeichert und beim
-nächsten Start wiederhergestellt.
+## Reiter „Frei / Excel“
+
+1. **Excel-Datei öffnen…** und das gewünschte **Arbeitsblatt** wählen
+   (`.xlsx`, `.xlsm` oder `.xls`; Excel muss nicht installiert sein).
+2. **Zweckform-Format** auswählen: L4761, L7159–L7169 oder 3666.
+   Maße und Anzahl pro Bogen stehen direkt in der Auswahl.
+3. Die **Vorschau** kontrollieren, bei Bedarf zunächst einen **Testbogen**
+   auf Normalpapier drucken und anschließend **Drucken** wählen.
+
+Jede Zelle in **Spalte A** ergibt genau ein Etikett. Die Reihenfolge ist
+**links nach rechts, dann die nächste Reihe von oben nach unten**.
+Ist der Bogen voll, geht es auf dem nächsten weiter. Weitere Excel-Spalten
+werden ignoriert; die Datei wird nicht verändert.
+
+- **Erste Zeile ist eine Überschrift**: auf Wunsch A1 überspringen;
+  standardmäßig wird schon A1 als Etikett übernommen.
+- **Leere Zeilen** bleiben standardmäßig als freie Etikettenpositionen erhalten.
+  Abschalten, um nur gefüllte Zellen lückenlos zu verteilen. Leere Zellen nach
+  dem letzten Inhalt erzeugen keine zusätzlichen Bögen.
+- **Zeilenumbrüche innerhalb einer Zelle** bleiben innerhalb desselben Etiketts.
+  Lange Texte werden umgebrochen und bei Bedarf passend verkleinert.
+- Text wie `00123` bleibt erhalten. Einfache Zahlenformate wie `00000`
+  werden ebenfalls berücksichtigt. Für Artikelnummern oder besondere
+  Darstellungen (z. B. Währung, Prozent oder komplexe Excel-Zahlenformate)
+  die Werte in Spalte A als **Text** ablegen.
+- Excel-Formeln verwenden das zuletzt in Excel gespeicherte Ergebnis.
+  Fehlt dieses oder enthält eine Zelle einen Excel-Fehler, nennt die App
+  die betroffene Zelle. Dann in Excel neu berechnen und speichern oder
+  die Formeln durch Werte ersetzen. Makros werden nicht ausgeführt.
+- **Start bei Etikett** nutzt angebrochene Bögen weiter; **Schriftgröße**,
+  **Umrandung** und **Feinjustierung X/Y** lassen sich unabhängig einstellen.
+- **Eigenes Format** erlaubt weitere rechteckige A4-Bögen: Breite/Höhe,
+  Spalten/Reihen, Ränder und Abstände in mm. Die zuvor ausgewählte Vorlage
+  dient als Ausgangspunkt. Ungültige Raster werden vor dem Druck gemeldet.
+- Der Druck erfolgt in **A4-Hochformat, in Originalgröße**. Vorschau und
+  Druck verwenden dieselbe Darstellung. Die grauen Hilfslinien und Nummern
+  freier Plätze in der Vorschau werden nur beim Testbogen als Rahmen gedruckt;
+  Platznummern werden nie gedruckt.
+
+Die Vorlagenmaße und Quellen stehen in [FORMAT_SOURCES.md](FORMAT_SOURCES.md).
+Pro Datei sind bis zu 50.000 eingelesene Zeilen und pro Zelle bis zu
+4.000 Zeichen vorgesehen. XLSM wird ohne Ausführung von Makros gelesen.
+
+Eingaben und Einstellungen werden automatisch gespeichert und beim
+nächsten Start wiederhergestellt. Im Reiter „Frei / Excel“ werden nur
+die Druck-/Importoptionen gespeichert; die Excel-Datei wird für einen neuen
+Auftrag erneut geöffnet.
 
 ## Neu bauen (für Entwickler)
 
 ```powershell
-pip install pywin32 pillow pyinstaller manifold3d numpy
-python -m PyInstaller --noconfirm --onefile --windowed --name "Lager-Etiketten" --icon icon.ico --add-data "icon.ico;." lager_label.py
+pip install -r requirements-dev.txt
+python -m unittest discover -s tests -v
+python -m PyInstaller --noconfirm Lager-Etiketten.spec
 ```
 
 Die fertige EXE liegt danach unter `dist\Lager-Etiketten.exe`.
