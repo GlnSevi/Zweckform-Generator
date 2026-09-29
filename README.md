@@ -85,6 +85,7 @@ Seite – als **STL-Datei** für den 3D-Drucker:
    sind hinterlegt. Über das Feld **Suche** filtern, z. B. nach Artikelnummer
    (`3477`, `L7160`), Bezeichnung (`Ordner`, `rund`, `Regal`) oder Größe
    (`70 × 36`, `63,5 38,1`). Maße und Anzahl pro Bogen stehen in der Auswahl.
+   Zusätzlich enthalten: **Flexicom FX1574-W / -GL** (90 × 20 mm, 28 Stück).
 3. Die **Vorschau** kontrollieren, bei Bedarf zunächst einen **Testbogen**
    auf Normalpapier drucken und anschließend **Drucken** wählen.
 

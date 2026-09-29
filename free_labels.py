@@ -82,7 +82,7 @@ class LabelFormat:
                 self.top + row * (self.height + self.gap_y), self.width, self.height)
 
 
-# Hand-checked against Avery Zweckform's template pages (see FORMAT_SOURCES.md).
+# Hand-checked against the manufacturers' template pages (see FORMAT_SOURCES.md).
 CURATED = [
     LabelFormat("L4761", 192, 61, 1, 4, 9, 26.5, name="Regal-Etiketten"),
     LabelFormat("L7159", 63.5, 33.9, 3, 8, 7.21, 12.9, 2.54, name="Adress-Etiketten"),
@@ -97,6 +97,9 @@ CURATED = [
     LabelFormat("L7168", 199.6, 143.5, 1, 2, 5.2, 5, name="Versand-Etiketten"),
     LabelFormat("L7169", 99.1, 139, 2, 2, 4.63, 9.5, 2.54, name="Paket-Etiketten"),
     LabelFormat("3666", 38, 21.2, 5, 13, 10, 10.7, name="Universal-Etiketten"),
+    # Other brands, from the manufacturer's measurement sheet.
+    # Flexicom Format74 (shop.flexicom.de/media/Formate/Format74.pdf), -W matt / -GL glossy.
+    LabelFormat("FX1574", 90, 20, 2, 14, 15, 8.5, name="Flexicom FX1574-W / FX1574-GL"),
 ]
 
 

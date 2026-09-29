@@ -191,6 +191,10 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(FORMATS_BY_CODE["4790"].shape, "round")
         f3477 = FORMATS_BY_CODE["3477"]
         self.assertEqual((f3477.width, f3477.height, f3477.per_sheet), (105, 41, 14))
+        flexicom = search_formats("FX1574-W")
+        self.assertEqual([f.code for f in flexicom], ["FX1574"])
+        self.assertEqual(flexicom[0].per_sheet, 28)
+        self.assertEqual(flexicom[0].rect(27), (105, 268.5, 90, 20))
 
     def test_search_matches_code_name_and_size(self):
         self.assertEqual(search_formats("3477")[0].code, "3477")

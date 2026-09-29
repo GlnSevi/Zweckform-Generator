@@ -18,6 +18,7 @@ Alle Maße sind in mm. Nominale Etikettenmaße und Stückzahlen wurden am
 | L7168 | 199,6 × 143,5 | 1 × 2 | [Avery](https://www.avery-zweckform.com/vorlage-l7168) |
 | L7169 | 99,1 × 139 | 2 × 2 | [Avery](https://www.avery-zweckform.com/vorlage-l7169) |
 | 3666 | 38 × 21,2 | 5 × 13 | [Avery](https://www.avery-zweckform.com/vorlage-3666) |
+| FX1574 (-W / -GL) | 90 × 20 | 2 × 14 | [Flexicom Format74](https://shop.flexicom.de/media/Formate/Format74.pdf) |
 
 Als zusätzlicher Abgleich der Raster dienen die Angaben im
 [LibreOffice-Etikettenkatalog](https://github.com/LibreOffice/core/blob/master/extras/source/labels/labels.xml).
@@ -29,7 +30,7 @@ L4761 behält das Raster der bestehenden App.
 
 ## Vollständiger Katalog (`zweckform_formats.json`)
 
-Zusätzlich zu den 13 oben geprüften Vorlagen enthält die App alle weiteren
+Zusätzlich zu den oben geprüften Vorlagen enthält die App alle weiteren
 A4-Bögen aus
 - dem LibreOffice-Katalog (Hersteller „Avery Zweckform“, „Avery A4“,
   „Avery A4/Asia“) und
@@ -41,7 +42,7 @@ Die Datei wird mit `python tools/build_formats.py` aus den Kopien in
 Endlos-, Letter- und A5-Formate entfallen, ebenso Bögen mit gemischten
 Etikettengrößen und die wenigen Katalogeinträge, deren Raster nicht auf A4
 passt (das Skript listet sie auf). Bei doppelter Artikelnummer gewinnt die
-deutsche Zweckform-Angabe; die 13 geprüften Vorlagen haben immer Vorrang.
+deutsche Zweckform-Angabe; die geprüften Vorlagen haben immer Vorrang.
 Varianten mit gleicher Nummer, aber anderem Raster erhalten eine Endung
 (z. B. `C2050-2`).
 
